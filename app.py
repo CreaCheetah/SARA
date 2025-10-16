@@ -7,8 +7,15 @@ app = FastAPI()
 def health():
     return {"status": "ok"}
 
+def twiml_response():
+    vr = VoiceResponse()
+    vr.say("Welkom bij Ristorante Adam. Testopstelling actief. Fijne dag verder.")
+    return Response(str(vr), media_type="application/xml")
+
+@app.get("/twilio/voice")
+async def test_voice():
+    return twiml_response()
+
 @app.post("/twilio/voice")
 async def voice(_: Request):
-    vr = VoiceResponse()
-    vr.say("Welkom bij Ristorante Adam. Testopstelling actief.")
-    return Response(str(vr), media_type="application/xml")
+    return twiml_response()
