@@ -2,3 +2,4 @@ fastapi
 uvicorn
 tzdata
 pydantic
+redis>=5.0
