@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Belservice • Live instellingen</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="sub">
+    <a class="back" href="index.html">Terug</a>
+    <h1>Belservice • Live instellingen</h1>
+    <div class="flag">🇮🇹</div>
+  </header>
+
+  <section class="card auth">
+    <label>Gebruikersnaam <input id="user" value="admin"></label>
+    <label>Wachtwoord <input id="pass" type="password" placeholder="••••••••"></label>
+    <button id="login" class="btn">Inloggen</button>
+    <span id="authStatus"></span>
+  </section>
+
+  <section class="card">
+    <h2>Status</h2>
+    <div class="grid status">
+      <div>Open/dicht: <strong id="mode">-</strong></div>
+      <div>Bezorging: <strong id="delivery">-</strong></div>
+      <div>Afhalen: <strong id="pickup">-</strong></div>
+      <div>Bot actief: <strong id="bot">-</strong></div>
+      <div>Keuken: <strong id="kitchen">-</strong></div>
+      <div>Tijdvenster: <span id="win">-</span></div>
+      <div>Update: <span id="now">-</span></div>
+    </div>
+    <button id="refresh" class="btn">Vernieuwen</button>
+  </section>
+
+  <section class="card">
+    <h2>Instellingen</h2>
+    <div class="grid form">
+      <label class="switch"><input type="checkbox" id="bot_enabled"> Belbot actief</label>
+      <label class="switch"><input type="checkbox" id="kitchen_closed"> Keuken gesloten</label>
+      <label class="switch"><input type="checkbox" id="pasta_available" checked> Pasta’s beschikbaar</label>
+
+      <label>Vertraging pasta
+        <select id="delay_pasta_minutes">
+          <option>0</option><option>10</option><option>20</option>
+          <option>30</option><option>45</option><option>60</option>
+        </select>
+      </label>
+
+      <label>Vertraging schotels
+        <select id="delay_schotels_minutes">
+          <option>0</option><option>10</option><option>20</option>
+          <option>30</option><option>45</option><option>60</option>
+        </select>
+      </label>
+
+      <fieldset class="mode">
+        <legend>Modus</legend>
+        <label><input type="radio" name="mode" value="auto" checked> Auto</label>
+        <label><input type="radio" name="mode" value="open"> Open</label>
+        <label><input type="radio" name="mode" value="closed"> Gesloten</label>
+      </fieldset>
+
+      <div class="col">
+        <label class="switch"><input type="checkbox" id="delivery_enabled_null"> Bezorging handmatig</label>
+        <label class="switch"><input type="checkbox" id="delivery_enabled"> Bezorging aan</label>
+      </div>
+      <div class="col">
+        <label class="switch"><input type="checkbox" id="pickup_enabled_null"> Afhalen handmatig</label>
+        <label class="switch"><input type="checkbox" id="pickup_enabled"> Afhalen aan</label>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="save" class="btn btn-green">Opslaan</button>
+      <label class="switch small"><input type="checkbox" id="autopoll" checked> Auto-ververs elke 5 s</label>
+    </div>
+
+    <div id="saveStatus" class="note"></div>
+  </section>
+
+  <script src="live.js"></script>
+</body>
+</html>
