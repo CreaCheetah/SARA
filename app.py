@@ -6,6 +6,8 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
 from zoneinfo import ZoneInfo
 from redis import Redis
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 
 app = FastAPI(title="Adams Belbot")
 
@@ -17,7 +19,7 @@ DELIVERY_START, DELIVERY_END = time(17, 0), time(21, 30) # 17:00–21:30
 CALLER_ID      = "0226354645"  # Twilio callerId
 FALLBACK_PHONE = "0226427541"  # doorverbinden bij bot uit
 
-# Auth
+# ===== Auth =====
 security = HTTPBasic()
 ADMIN_USER = "admin"
 ADMIN_PASS = "AdamAdam2513"
@@ -149,7 +151,7 @@ def select_greeting(now: datetime | None = None) -> str:
     if time(21,30) <= t < OPEN_END: return G_LATE
     return G_DAY if t < time(18,0) else G_EVE
 
-# ===== Endpoints =====
+# ===== API Endpoints =====
 @app.get("/runtime/status", response_model=RuntimeOut)
 def runtime_status():
     return evaluate_status()
@@ -187,3 +189,10 @@ def set_toggles(body: TogglesIn):
         raise HTTPException(status_code=400, detail="Delay must be one of 0,10,20,30,45,60")
     _save_overrides(body)
     return evaluate_status()
+
+# ===== Admin Dashboard Static Files =====
+app.mount("/admin/ui", StaticFiles(directory="admin_ui", html=True), name="admin_ui")
+
+@app.get("/admin/")
+def admin_root():
+    return RedirectResponse(url="/admin/ui/index.html")
