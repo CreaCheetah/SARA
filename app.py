@@ -1,198 +1,86 @@
-# app.py — Adams Belbot met Redis storage (workersafe)
-from datetime import datetime, time, timedelta
-import os, json
-from fastapi import FastAPI, Response, Depends, HTTPException
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from pydantic import BaseModel, Field
-from zoneinfo import ZoneInfo
-from redis import Redis
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+// Mada Belbot – Twilio Voice webhook (no forwarding; time-based closed greeting)
 
-app = FastAPI(title="Adams Belbot")
+const express = require('express');
+const bodyParser = require('body-parser');
+const { twiml: { VoiceResponse } } = require('twilio');
+const crypto = require('crypto');
 
-# ===== Config =====
-TZ = ZoneInfo("Europe/Amsterdam")
-OPEN_START, OPEN_END = time(16, 0), time(22, 0)          # 16:00–22:00
-DELIVERY_START, DELIVERY_END = time(17, 0), time(21, 30) # 17:00–21:30
+// Config
+const PORT = process.env.PORT || 3000;
+const TZ = 'Europe/Amsterdam';
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || null; // optioneel
+const MADA_LIVE = process.env.MADA_LIVE === 'true'; // laat op false
 
-CALLER_ID      = "0226354645"  # Twilio callerId
-FALLBACK_PHONE = "0226427541"  # doorverbinden bij bot uit
+// Operationele vensters (projectcontext)
+// Overdag (16:00–18:00), Avond (18:00–21:30), Laat (21:30–22:00 alleen afhalen)
+const WINDOW_OPEN_START = { h:16, m:0 };
+const WINDOW_DINNER_END = { h:21, m:30 };
+const WINDOW_TAKEOUT_END = { h:22, m:0 };
 
-# ===== Auth =====
-security = HTTPBasic()
-ADMIN_USER = "admin"
-ADMIN_PASS = "AdamAdam2513"
-def auth(creds: HTTPBasicCredentials = Depends(security)):
-    if creds.username != ADMIN_USER or creds.password != ADMIN_PASS:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return True
+// Helpers
+function nowInAmsterdam() {
+  const utc = new Date();
+  const fmt = new Intl.DateTimeFormat('nl-NL', {
+    timeZone: TZ, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+  const parts = Object.fromEntries(fmt.formatToParts(utc).map(p => [p.type, p.value]));
+  return new Date(parseInt(parts.year,10), parseInt(parts.month,10)-1, parseInt(parts.day,10),
+                  parseInt(parts.hour,10), parseInt(parts.minute,10), parseInt(parts.second,10));
+}
+function hm(d){return d.getHours()*60+d.getMinutes();}
+function minutes(h,m){return h*60+m;}
+function partOfDay(d){const h=d.getHours(); if(h<6)return'nacht'; if(h<12)return'morgen'; if(h<18)return'middag'; return'avond';}
+function salutation(d){const p=partOfDay(d); if(p==='morgen')return'Goedemorgen'; if(p==='middag')return'Goedemiddag'; return'Goedenavond';}
+function isWithin(d,a,b){const t=hm(d); return t>=minutes(a.h,a.m) && t<minutes(b.h,b.m);}
+function statusFor(d){
+  const open = isWithin(d, WINDOW_OPEN_START, WINDOW_TAKEOUT_END);
+  const dinner = isWithin(d, WINDOW_OPEN_START, WINDOW_DINNER_END);
+  const takeout = isWithin(d, WINDOW_DINNER_END, WINDOW_TAKEOUT_END);
+  return { open, dinner, takeout };
+}
+function validateTwilioSignature(req){
+  if(!TWILIO_AUTH_TOKEN) return true; // uit in dev
+  const url = (req.protocol+'://'+req.get('host')+req.originalUrl);
+  const params = req.body || {};
+  const sorted = Object.keys(params).sort().reduce((acc,k)=>acc+k+params[k],'');
+  const base = url + sorted;
+  const sig = crypto.createHmac('sha1', TWILIO_AUTH_TOKEN).update(Buffer.from(base,'utf-8')).digest('base64');
+  return sig === req.get('X-Twilio-Signature');
+}
 
-# ===== Redis =====
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-r = Redis.from_url(REDIS_URL, decode_responses=True)
-KEY_OVERRIDES = "belbot:overrides"  # JSON + TTL via EXPIRE
+// App
+const app = express();
+app.use(bodyParser.urlencoded({ extended: false }));
 
-# ===== Modellen =====
-class TogglesIn(BaseModel):
-    bot_enabled: bool = True
-    kitchen_closed: bool = False
-    pasta_available: bool = True
-    delay_pasta_minutes: int = Field(default=0, ge=0)       # 0|10|20|30|45|60
-    delay_schotels_minutes: int = Field(default=0, ge=0)    # 0|10|20|30|45|60
-    is_open_override: str | None = "auto"                   # "open"|"closed"|"auto"
-    delivery_enabled: bool | None = None                    # None = auto
-    pickup_enabled: bool | None = None                      # None = auto
-    ttl_minutes: int | None = 180
+app.get('/runtime/status', (req,res)=>{
+  const now = nowInAmsterdam();
+  res.json({ now: now.toISOString(), tz: TZ, partOfDay: partOfDay(now), status: statusFor(now), live: MADA_LIVE });
+});
 
-class RuntimeOut(BaseModel):
-    now: str
-    mode: str
-    delivery_enabled: bool
-    pickup_enabled: bool
-    close_reason: str | None = None
-    kitchen_closed: bool = False
-    bot_enabled: bool = True
-    pasta_available: bool
-    delay_pasta_minutes: int
-    delay_schotels_minutes: int
-    window: dict
+app.post('/voice/incoming', (req, res) => {
+  if (!validateTwilioSignature(req)) return res.status(403).send('Forbidden');
 
-# ===== Helpers =====
-def _auto(now: datetime):
-    t = now.time()
-    open_now = OPEN_START <= t < OPEN_END
-    delivery_auto = DELIVERY_START <= t < DELIVERY_END
-    pickup_auto = OPEN_START <= t < OPEN_END
-    return open_now, delivery_auto, pickup_auto
+  const vr = new VoiceResponse();
+  const now = nowInAmsterdam();
+  const greet = salutation(now);
+  const st = statusFor(now);
 
-def _load_overrides() -> TogglesIn | None:
-    raw = r.get(KEY_OVERRIDES)
-    if not raw:
-        return None
-    data = json.loads(raw)
-    return TogglesIn(**data)
+  // Voor nu: nooit doorverbinden. Nummers bewust weggelaten.
+  vr.say({ language: 'nl-NL' }, `${greet}. We zijn op dit moment gesloten.`);
+  vr.pause({ length: 1 });
 
-def _save_overrides(body: TogglesIn):
-    ttl = (body.ttl_minutes or 180) * 60
-    r.set(KEY_OVERRIDES, body.model_dump_json(), ex=ttl)
+  if (st.open) {
+    if (st.dinner) vr.say({ language: 'nl-NL' }, 'Keuken geopend van zestien tot eenentwintig uur dertig.');
+    else if (st.takeout) vr.say({ language: 'nl-NL' }, 'Alleen afhalen mogelijk tot tweeëntwintig uur.');
+  } else {
+    vr.say({ language: 'nl-NL' }, 'Onze tijden: diner van zestien tot eenentwintig uur dertig, afhalen tot tweeëntwintig uur.');
+  }
 
-def evaluate_status(now: datetime | None = None) -> RuntimeOut:
-    now = now.astimezone(TZ) if now else datetime.now(TZ)
-    over = _load_overrides()
-    open_auto, delivery_auto, pickup_auto = _auto(now)
+  vr.say({ language: 'nl-NL' }, 'Bezoek onze website voor het menu. Dank u wel en een prettige dag.');
+  vr.hangup();
 
-    if over and over.is_open_override == "closed":
-        open_now = False
-    elif over and over.is_open_override == "open":
-        open_now = True
-    else:
-        open_now = open_auto
+  res.type('text/xml').send(vr.toString());
+});
 
-    if over and over.kitchen_closed:
-        return RuntimeOut(
-            now=now.isoformat(), mode="closed",
-            delivery_enabled=False, pickup_enabled=False,
-            close_reason=None, kitchen_closed=True,
-            bot_enabled=(over.bot_enabled),
-            pasta_available=over.pasta_available,
-            delay_pasta_minutes=over.delay_pasta_minutes,
-            delay_schotels_minutes=over.delay_schotels_minutes,
-            window={"open":"16:00","delivery":"17:00-21:30","close":"22:00"}
-        )
-
-    if not open_now:
-        return RuntimeOut(
-            now=now.isoformat(), mode="closed",
-            delivery_enabled=False, pickup_enabled=False,
-            close_reason="We zijn op dit moment gesloten.",
-            kitchen_closed=False,
-            bot_enabled=(over.bot_enabled if over else True),
-            pasta_available=(over.pasta_available if over else True),
-            delay_pasta_minutes=(over.delay_pasta_minutes if over else 0),
-            delay_schotels_minutes=(over.delay_schotels_minutes if over else 0),
-            window={"open":"16:00","delivery":"17:00-21:30","close":"22:00"}
-        )
-
-    delivery = delivery_auto
-    pickup = pickup_auto
-    if over:
-        if over.delivery_enabled is not None:
-            delivery = delivery and over.delivery_enabled
-        if over.pickup_enabled is not None:
-            pickup = pickup and over.pickup_enabled
-
-    return RuntimeOut(
-        now=now.isoformat(), mode="open",
-        delivery_enabled=delivery, pickup_enabled=pickup,
-        close_reason=None, kitchen_closed=False,
-        bot_enabled=(over.bot_enabled if over else True),
-        pasta_available=(over.pasta_available if over else True),
-        delay_pasta_minutes=(over.delay_pasta_minutes if over else 0),
-        delay_schotels_minutes=(over.delay_schotels_minutes if over else 0),
-        window={"open":"16:00","delivery":"17:00-21:30","close":"22:00"}
-    )
-
-# ===== Begroetingen =====
-NAME = "Ristorante Adams Spanbroek"
-REC = "Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren."
-G_DAY    = f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}. {REC} Waar kan ik u vandaag mee helpen?"
-G_EVE    = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. {REC} Waar kan ik u vandaag mee helpen?"
-G_LATE   = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. {REC} We zijn nog geopend tot tien uur. Bezorging is nu gesloten, afhalen kan nog. Waar kan ik u vandaag mee helpen?"
-G_CLOSED = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds. U kunt uw bestelling plaatsen zodra we weer geopend zijn."
-G_KITCHEN= f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. Excuses, de keuken is gesloten. We nemen nu geen bestellingen aan."
-
-def select_greeting(now: datetime | None = None) -> str:
-    now = now.astimezone(TZ) if now else datetime.now(TZ)
-    t = now.time()
-    st = evaluate_status(now)
-    if st.kitchen_closed: return G_KITCHEN
-    if st.mode == "closed": return G_CLOSED
-    if time(21,30) <= t < OPEN_END: return G_LATE
-    return G_DAY if t < time(18,0) else G_EVE
-
-# ===== API Endpoints =====
-@app.get("/runtime/status", response_model=RuntimeOut)
-def runtime_status():
-    return evaluate_status()
-
-@app.api_route("/voice/incoming", methods=["GET","POST"])
-def voice_incoming():
-    st = evaluate_status()
-    if not st.bot_enabled:
-        twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Dial callerId="{CALLER_ID}">{FALLBACK_PHONE}</Dial>
-</Response>"""
-        return Response(content=twiml, media_type="text/xml")
-
-    text = select_greeting()
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say language="nl-NL">{text}</Say>
-  <Pause length="0.2"/>
-  <Gather input="speech" language="nl-NL" action="/voice/continue" bargeIn="true" speechTimeout="auto"/>
-</Response>"""
-    return Response(content=twiml, media_type="text/xml")
-
-@app.post("/voice/continue")
-def voice_continue():
-    return Response(
-        content="<?xml version='1.0' encoding='UTF-8'?><Response><Say language='nl-NL'>Een ogenblik alstublieft.</Say></Response>",
-        media_type="text/xml"
-    )
-
-@app.post("/admin/toggles", dependencies=[Depends(auth)], response_model=RuntimeOut)
-def set_toggles(body: TogglesIn):
-    valid = {0,10,20,30,45,60}
-    if body.delay_pasta_minutes not in valid or body.delay_schotels_minutes not in valid:
-        raise HTTPException(status_code=400, detail="Delay must be one of 0,10,20,30,45,60")
-    _save_overrides(body)
-    return evaluate_status()
-
-# ===== Admin Dashboard Static Files =====
-app.mount("/admin/ui", StaticFiles(directory="admin_ui", html=True), name="admin_ui")
-
-@app.get("/admin/")
-def admin_root():
-    return RedirectResponse(url="/admin/ui/index.html")
+app.listen(PORT, ()=>{ console.log(`Mada Voice webhook listening on :${PORT}`); });
