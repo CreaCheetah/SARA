@@ -1,63 +1,40 @@
 <!doctype html>
 <html lang="nl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Belservice • Live instellingen</title>
-  <style>
-    :root{
-      --bg1:#e9f2eb; --bg2:#efe8e6; --card:#ffffff; --ink:#0f1720; --muted:#6b7280;
-      --ok:#16a34a; --off:#dc2626; --line:#e5e7eb; --btn:#111;
-    }
-    body{ margin:0; font-family: Inter, system-ui, sans-serif; color:var(--ink);
-      background: radial-gradient(1200px 600px at 10% 10%, var(--bg1), var(--bg2)); }
-    .wrap{ max-width:900px; margin:40px auto; padding:0 16px; }
-    header{ display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:16px; }
-    .flag{ width:26px; height:26px; border-radius:8px; background:
-      linear-gradient(90deg,#1e9b3f 33%, #fff 33% 66%, #d21f2b 0); box-shadow:0 3px 10px rgba(0,0,0,.08);}
-    h1{ font-size:26px; margin:0; }
-    .card{ background:var(--card); border:1px solid var(--line); border-radius:16px;
-      box-shadow:0 8px 20px rgba(0,0,0,.08); padding:18px; }
-    .row{ display:grid; gap:16px; grid-template-columns:1fr; }
-    @media(min-width:800px){ .row{ grid-template-columns:1fr 1fr; } }
-    label{ font-weight:600; margin-bottom:6px; display:block; }
-    .muted{ color:var(--muted); }
-    .actions{ display:flex; gap:10px; align-items:center; margin-top:14px; }
-    .btn{ appearance:none; border:0; border-radius:12px; padding:10px 14px; font-weight:700; cursor:pointer; background:var(--btn); color:#fff; }
-    .btn.secondary{ background:#f3f4f6; color:#111; border:1px solid var(--line); }
-    .msg{ min-height:1em; }
-    /* Switch */
-    .switch{ --w:54px; --h:30px; position:relative; width:var(--w); height:var(--h); }
-    .switch input{ display:none; }
-    .track{ position:absolute; inset:0; background:#f3f4f6; border:1px solid var(--line); border-radius:999px; transition:.2s; }
-    .thumb{ position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff;
-      border:1px solid #ddd; box-shadow:0 2px 6px rgba(0,0,0,.15); transition:.2s; }
-    .switch input:checked + .track{ background:#dcfce7; border-color:#bbf7d0; }
-    .switch input:checked + .track .thumb{ left: calc(100% - 27px); }
-    /* Segmented */
-    .seg{ display:inline-grid; grid-auto-flow:column; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
-    .seg button{ border:0; background:#f8fafc; padding:8px 12px; font-weight:600; cursor:pointer; }
-    .seg button[aria-pressed="true"]{ background:#111; color:#fff; }
-    /* Slider */
-    .slider{ display:grid; gap:6px; }
-    input[type=range]{ width:100%; height:6px; appearance:none;
-      background:linear-gradient(90deg,var(--ok),var(--off)); border-radius:99px; outline:0; }
-    input[type=range]::-webkit-slider-thumb{ appearance:none; width:20px; height:20px; border-radius:50%;
-      background:#fff; border:2px solid #111; box-shadow:0 3px 10px rgba(0,0,0,.2); }
-    .ticks{ display:flex; justify-content:space-between; font-size:12px; color:var(--muted); }
-    /* Login bar */
-    .login{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
-    .login input{ padding:8px 10px; border-radius:10px; border:1px solid var(--line); }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Belservice • Dashboard</title>
+<style>
+  :root{--bg1:#e9f2eb;--bg2:#efe8e6;--card:#fff;--ink:#0f1720;--muted:#6b7280;--line:#e5e7eb;--green:#138a43;--red:#c52e34}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);
+    background:radial-gradient(1200px 600px at 10% 10%,var(--bg1),var(--bg2))}
+  .wrap{max-width:1000px;margin:56px auto;padding:0 16px}
+  header{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:22px}
+  .flag{width:28px;height:28px;border-radius:8px;background:linear-gradient(90deg,#1e9b3f 33%,#fff 33% 66%,#d21f2b 0);box-shadow:0 3px 10px rgba(0,0,0,.08)}
+  h1{margin:0;font-size:28px}
+  .login{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0 18px}
+  .login input{padding:10px 12px;border-radius:12px;border:1px solid var(--line)}
+  .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;background:#111;color:#fff}
+  .muted{color:var(--muted)}
+  .grid{display:grid;gap:18px;grid-template-columns:1fr}
+  @media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 24px rgba(0,0,0,.08);padding:18px}
+  .card h2{margin:0 0 6px}
+  .card p{margin:0 0 12px;color:var(--muted)}
+  .cta{display:inline-block;padding:12px 14px;border-radius:12px;font-weight:800;color:#fff;text-decoration:none}
+  .green{background:var(--green)}
+  .red{background:var(--red)}
+  .tip{margin-top:14px;text-align:center;color:var(--muted)}
+</style>
 </head>
 <body>
   <div class="wrap">
     <header>
       <div class="flag"></div>
-      <h1>Belservice • Live instellingen</h1>
+      <h1>Belservice • Dashboard</h1>
     </header>
 
-    <!-- Inloggen voor API-calls (Basic header) -->
+    <!-- Login die de Basic token bewaart voor andere pagina's -->
     <div class="login">
       <input id="user" type="text" placeholder="admin" autocomplete="username" />
       <input id="pass" type="password" placeholder="wachtwoord" autocomplete="current-password" />
@@ -65,174 +42,54 @@
       <span id="loginMsg" class="muted"></span>
     </div>
 
-    <section class="card">
-      <div class="row">
+    <div class="grid">
+      <section class="card">
+        <h2>Live instellingen</h2>
+        <p>Belbot aan/uit, keukenstatus, bezorging/afhalen en extra bereidingstijd.</p>
+        <a class="cta green" href="live.html">Open live instellingen</a>
+      </section>
 
-        <div>
-          <label>Belbot actief</label>
-          <label class="switch">
-            <input id="bot_enabled" type="checkbox">
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-        </div>
+      <section class="card">
+        <h2>Rapportage</h2>
+        <p>Overzicht en export. (optioneel, later uit te werken)</p>
+        <a class="cta red" href="report.html">Open rapportage</a>
+      </section>
+    </div>
 
-        <div>
-          <label>Keuken tijdelijk dicht</label>
-          <label class="switch">
-            <input id="kitchen_closed" type="checkbox">
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-        </div>
-
-        <div>
-          <label>Pasta’s beschikbaar</label>
-          <label class="switch">
-            <input id="pasta_available" type="checkbox" checked>
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-        </div>
-
-        <div>
-          <label>Openingsstatus forceren</label>
-          <div class="seg" role="group" aria-label="Openingsstatus">
-            <button id="seg-auto"   type="button" data-val="auto"   aria-pressed="true">Auto</button>
-            <button id="seg-open"   type="button" data-val="open"   aria-pressed="false">Open</button>
-            <button id="seg-closed" type="button" data-val="closed" aria-pressed="false">Gesloten</button>
-          </div>
-        </div>
-
-        <div>
-          <label>Bezorging aan</label>
-          <label class="switch">
-            <input id="delivery_enabled" type="checkbox">
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-        </div>
-
-        <div>
-          <label>Afhalen aan</label>
-          <label class="switch">
-            <input id="pickup_enabled" type="checkbox">
-            <span class="track"><span class="thumb"></span></span>
-          </label>
-        </div>
-
-        <div>
-          <label>Extra bereidingstijd pasta</label>
-          <div class="slider">
-            <input id="delay_pasta_minutes" type="range" min="0" max="60" step="5" value="0" />
-            <div class="ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>45</span><span>60</span></div>
-          </div>
-        </div>
-
-        <div>
-          <label>Extra bereidingstijd schotels</label>
-          <div class="slider">
-            <input id="delay_schotels_minutes" type="range" min="0" max="60" step="5" value="0" />
-            <div class="ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>45</span><span>60</span></div>
-          </div>
-        </div>
-
-      </div>
-
-      <div class="actions">
-        <button class="btn" id="btnSave">Opslaan</button>
-        <button class="btn secondary" id="btnClear">Terug naar automatisch</button>
-        <span id="saveMsg" class="msg muted"></span>
-        <span id="errMsg" class="msg muted"></span>
-      </div>
-    </section>
+    <p class="tip">Tip: maak van deze pagina een vaste link voor Adam.</p>
   </div>
 
-  <script>
-    // ---- Auth header via login ----
-    let authHeader = null;
-    function basicAuth(u,p){ return 'Basic ' + btoa(u + ':' + p); }
-    document.getElementById('btnLogin').addEventListener('click', async ()=>{
-      const u = document.getElementById('user').value.trim();
-      const p = document.getElementById('pass').value;
-      const msg = document.getElementById('loginMsg');
-      msg.textContent = '';
-      try{
-        authHeader = basicAuth(u,p);
-        // proefcall
-        await apiGet('/runtime/status');
-        msg.textContent = 'ingelogd';
-      }catch(e){
-        authHeader = null;
-        msg.textContent = 'login mislukt';
+<script>
+  // Bewaar Basic Auth in sessionStorage zodat live.html hem kan gebruiken
+  function basicAuth(u,p){ return 'Basic ' + btoa(u + ':' + p); }
+  async function apiPing(auth){
+    const res = await fetch('/runtime/status', {headers:{'Authorization':auth,'Accept':'application/json'}});
+    return res.ok;
+  }
+  document.getElementById('btnLogin').addEventListener('click', async ()=>{
+    const u=document.getElementById('user').value.trim();
+    const p=document.getElementById('pass').value;
+    const auth=basicAuth(u,p);
+    document.getElementById('loginMsg').textContent='controleren…';
+    try{
+      const ok = await apiPing(auth);
+      if(ok){
+        sessionStorage.setItem('auth', auth);
+        document.getElementById('loginMsg').textContent='ingelogd';
+      } else {
+        sessionStorage.removeItem('auth');
+        document.getElementById('loginMsg').textContent='login mislukt';
       }
-    });
-
-    // ---- helpers ----
-    const segBtns = [...document.querySelectorAll('.seg button')];
-    function setSeg(val){ segBtns.forEach(b=> b.setAttribute('aria-pressed', b.dataset.val===val ? 'true':'false')); }
-    segBtns.forEach(b=> b.addEventListener('click',()=> setSeg(b.dataset.val)));
-
-    function snap(v){ const steps=[0,10,20,30,45,60]; return steps.reduce((a,b)=> Math.abs(b-v)<Math.abs(a-v)?b:a, steps[0]); }
-
-    async function apiGet(path){
-      const res = await fetch(path, { headers:{ 'Authorization': authHeader, 'Accept':'application/json' }});
-      if(!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      return res.json();
+    }catch(e){
+      sessionStorage.removeItem('auth');
+      document.getElementById('loginMsg').textContent='login mislukt';
     }
-    async function apiPost(path, body){
-      const res = await fetch(path, {
-        method:'POST',
-        headers:{
-          'Authorization': authHeader,
-          'Content-Type':'application/json',
-          'Accept':'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-      if(!res.ok){ const t = await res.text(); throw new Error(`${res.status} ${res.statusText}\n${t}`); }
-      return res.json();
-    }
+  });
 
-    // ---- Save ----
-    async function save(){
-      document.getElementById('saveMsg').textContent='';
-      document.getElementById('errMsg').textContent='';
-      const openVal = segBtns.find(b=>b.getAttribute('aria-pressed')==='true').dataset.val;
-      const payload = {
-        bot_enabled: document.getElementById('bot_enabled').checked,
-        kitchen_closed: document.getElementById('kitchen_closed').checked,
-        pasta_available: document.getElementById('pasta_available').checked,
-        is_open_override: openVal,
-        delivery_enabled: document.getElementById('delivery_enabled').checked,
-        pickup_enabled: document.getElementById('pickup_enabled').checked,
-        delay_pasta_minutes: snap(parseInt(document.getElementById('delay_pasta_minutes').value||'0',10)),
-        delay_schotels_minutes: snap(parseInt(document.getElementById('delay_schotels_minutes').value||'0',10))
-      };
-      try{
-        await apiPost('/admin/toggles', payload);
-        document.getElementById('saveMsg').textContent='opgeslagen';
-      }catch(e){
-        document.getElementById('errMsg').textContent=String(e.message||e);
-      }
-    }
-    document.getElementById('btnSave').addEventListener('click', save);
-
-    // ---- Clear to auto ----
-    document.getElementById('btnClear').addEventListener('click', async ()=>{
-      try{
-        await apiPost('/admin/toggles', {
-          is_open_override:'auto',
-          bot_enabled:false, kitchen_closed:false,
-          delivery_enabled:false, pickup_enabled:false,
-          pasta_available:true,
-          delay_pasta_minutes:0, delay_schotels_minutes:0
-        });
-        setSeg('auto');
-        document.getElementById('saveMsg').textContent='teruggezet';
-      }catch(e){
-        document.getElementById('errMsg').textContent=String(e.message||e);
-      }
-    });
-
-    // init
-    setSeg('auto');
-  </script>
+  // Toon direct of je nog ingelogd bent
+  if(sessionStorage.getItem('auth')){
+    document.getElementById('loginMsg').textContent='ingelogd';
+  }
+</script>
 </body>
 </html>
