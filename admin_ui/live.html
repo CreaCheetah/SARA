@@ -79,6 +79,20 @@
 
     <div id="saveStatus" class="note"></div>
   </section>
+<script>
+// gebruik het opgeslagen login-token van index.html
+const __auth = sessionStorage.getItem('auth');
+if (__auth) {
+  const origFetch = window.fetch;
+  window.fetch = (url, opts={}) => {
+    opts.headers = Object.assign({'Authorization': __auth}, opts.headers||{});
+    return origFetch(url, opts);
+  };
+  document.getElementById('authStatus')?.append(' (sessie actief)');
+}
+</script>
+
+
 
   <script src="live.js"></script>
 </body>
