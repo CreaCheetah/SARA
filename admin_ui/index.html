@@ -1,31 +1,280 @@
 <!doctype html>
 <html lang="nl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Belservice • Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mada Dashboard — Ristorante Adam</title>
+  <style>
+    :root { font-family: system-ui, sans-serif; line-height: 1.4; }
+    body { margin: 24px; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    label { font-weight: 600; display: block; margin-bottom: 6px; }
+    input[type="text"], input[type="number"], select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 8px; }
+    input[type="checkbox"] { transform: scale(1.1); margin-right: 8px; }
+    button { padding: 10px 14px; border: 1px solid #222; border-radius: 10px; background: #fff; cursor: pointer; }
+    button.primary { background: #111; color: #fff; }
+    .muted { color: #666; }
+    .ok { color: #0a7f3f; }
+    .err { color: #b00020; white-space: pre-wrap; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 900px){ .grid{grid-template-columns: 1fr} .row{grid-template-columns:1fr} }
+    .kv { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#f8f8f8; border:1px solid #eee; padding:8px; border-radius:8px; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid #ddd; }
+  </style>
 </head>
 <body>
-  <header>
-    <div class="flag">🇮🇹</div>
-    <h1>Belservice • Dashboard</h1>
-  </header>
+  <h1>Mada Dashboard <span class="muted">— Ristorante Adam</span></h1>
 
-  <div class="cards">
-    <section class="card">
-      <h2>Live instellingen</h2>
-      <p>Belbot aan/uit, pasta’s beschikbaar, kanalen en vertragingen.</p>
-      <a class="btn btn-green" href="live.html">Open live instellingen</a>
-    </section>
-
-    <section class="card">
-      <h2>Rapportage</h2>
-      <p>Filter op Bezorgd/Ophalen en Contant/Pin. Export naar CSV.</p>
-      <a class="btn btn-red" href="report.html">Open rapportage</a>
-    </section>
+  <!-- Login -->
+  <div class="card" id="loginCard">
+    <h2>Inloggen</h2>
+    <p class="muted">Vul het beheerdersaccount in. Gegevens worden <b>niet</b> opgeslagen. Alleen gebruikt zolang deze tab open is.</p>
+    <div class="row">
+      <div>
+        <label for="user">Gebruikersnaam</label>
+        <input id="user" type="text" placeholder="bijv. admin" autocomplete="username" />
+      </div>
+      <div>
+        <label for="pass">Wachtwoord</label>
+        <input id="pass" type="password" placeholder="wachtwoord" autocomplete="current-password" />
+      </div>
+    </div>
+    <div style="margin-top:12px; display:flex; gap:8px;">
+      <button class="primary" id="btnLogin">Inloggen</button>
+      <button id="btnLogout" style="display:none;">Uitloggen</button>
+      <div id="loginMsg" class="err" role="alert" aria-live="polite"></div>
+    </div>
   </div>
 
-  <p class="tip">Tip: maak van deze pagina een vaste link voor Adam (bladwijzer).</p>
+  <!-- Status -->
+  <div class="card" id="statusCard" style="display:none;">
+    <h2>Huidige status</h2>
+    <div class="grid">
+      <div><span class="pill">Open</span><div id="s_open" class="kv">—</div></div>
+      <div><span class="pill">Bezorging</span><div id="s_delivery" class="kv">—</div></div>
+      <div><span class="pill">Afhalen</span><div id="s_pickup" class="kv">—</div></div>
+    </div>
+    <div style="margin-top:8px;">
+      <button id="btnRefresh">Vernieuwen</button>
+      <span id="statusMsg" class="muted"></span>
+    </div>
+  </div>
+
+  <!-- Toggles -->
+  <div class="card" id="togglesCard" style="display:none;">
+    <h2>Instellingen</h2>
+    <div class="row">
+      <div>
+        <label><input type="checkbox" id="bot_enabled" /> AI-assistent actief</label>
+      </div>
+      <div>
+        <label><input type="checkbox" id="kitchen_closed" /> Keuken tijdelijk dicht</label>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label for="is_open_override">Openingsstatus forceren</label>
+        <select id="is_open_override">
+          <option value="auto">auto</option>
+          <option value="open">open</option>
+          <option value="closed">closed</option>
+        </select>
+      </div>
+      <div>
+        <label for="ttl_minutes">Geldigheidsduur overrides (minuten)</label>
+        <input id="ttl_minutes" type="number" min="1" max="720" value="180" />
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label><input type="checkbox" id="delivery_enabled" /> Bezorging aan</label>
+      </div>
+      <div>
+        <label><input type="checkbox" id="pickup_enabled" /> Afhalen aan</label>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px;">
+      <div>
+        <label><input type="checkbox" id="pasta_available" /> Pasta op voorraad</label>
+      </div>
+      <div class="row" style="gap:12px;">
+        <div>
+          <label for="delay_pasta_minutes">Extra bereidingstijd pasta (min.)</label>
+          <input id="delay_pasta_minutes" type="number" min="0" max="60" value="0" />
+        </div>
+        <div>
+          <label for="delay_schotels_minutes">Extra bereidingstijd schotels (min.)</label>
+          <input id="delay_schotels_minutes" type="number" min="0" max="60" value="0" />
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; gap:8px;">
+      <button class="primary" id="btnSave">Opslaan</button>
+      <button id="btnClear">Terug naar automatisch</button>
+      <span id="saveMsg" class="ok" style="display:none;">Opgeslagen.</span>
+      <span id="errMsg" class="err"></span>
+    </div>
+  </div>
+
+  <script>
+    let authHeader = null;
+
+    function setLoggedIn(state){
+      const loginCard = document.getElementById('loginCard');
+      const tog = document.getElementById('togglesCard');
+      const stat = document.getElementById('statusCard');
+      const btnLogout = document.getElementById('btnLogout');
+      if(state){
+        loginCard.querySelector('#btnLogin').style.display = 'none';
+        btnLogout.style.display = 'inline-block';
+        tog.style.display = '';
+        stat.style.display = '';
+        document.getElementById('loginMsg').textContent = '';
+        loadStatus();
+      } else {
+        loginCard.querySelector('#btnLogin').style.display = 'inline-block';
+        btnLogout.style.display = 'none';
+        tog.style.display = 'none';
+        stat.style.display = 'none';
+      }
+    }
+
+    function basicAuth(user, pass){
+      const token = btoa(`${user}:${pass}`);
+      return `Basic ${token}`;
+    }
+
+    async function apiGet(path){
+      const res = await fetch(path, {
+        method: 'GET',
+        headers: {
+          'Authorization': authHeader,
+          'Accept': 'application/json'
+        }
+      });
+      if(!res.ok) throw new Error(`GET ${path} — ${res.status} ${res.statusText}`);
+      return res.json();
+    }
+
+    async function apiPost(path, body){
+      const res = await fetch(path, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+      if(!res.ok){
+        const text = await res.text().catch(()=> '');
+        throw new Error(`POST ${path} — ${res.status} ${res.statusText}\n${text}`);
+      }
+      return res.json().catch(()=> ({}));
+    }
+
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+      const u = document.getElementById('user').value.trim();
+      const p = document.getElementById('pass').value;
+      const msg = document.getElementById('loginMsg');
+      msg.textContent = '';
+      try{
+        authHeader = basicAuth(u, p);
+        await apiGet('/runtime/status');
+        setLoggedIn(true);
+      } catch(e){
+        authHeader = null;
+        msg.textContent = 'Inloggen mislukt. Controleer gebruikersnaam of wachtwoord.';
+      }
+    });
+
+    document.getElementById('btnLogout').addEventListener('click', () => {
+      authHeader = null;
+      setLoggedIn(false);
+      document.getElementById('user').value = '';
+      document.getElementById('pass').value = '';
+    });
+
+    document.getElementById('btnRefresh').addEventListener('click', loadStatus);
+
+    async function loadStatus(){
+      const msg = document.getElementById('statusMsg');
+      msg.textContent = 'laden…';
+      try{
+        const data = await apiGet('/runtime/status');
+        document.getElementById('s_open').textContent = data.mode ?? '—';
+        document.getElementById('s_delivery').textContent = String(data.delivery_enabled ?? '—');
+        document.getElementById('s_pickup').textContent = String(data.pickup_enabled ?? '—');
+        msg.textContent = 'bijgewerkt';
+        setTimeout(()=> msg.textContent = '', 1200);
+      } catch(e){
+        msg.textContent = '';
+        document.getElementById('errMsg').textContent = String(e.message || e);
+      }
+    }
+
+    document.getElementById('btnSave').addEventListener('click', async () => {
+      clearMessages();
+      try{
+        const payload = collectPayload();
+        await apiPost('/admin/toggles', payload);
+        document.getElementById('saveMsg').style.display = 'inline';
+        await loadStatus();
+      } catch(e){
+        document.getElementById('errMsg').textContent = String(e.message || e);
+      }
+    });
+
+    document.getElementById('btnClear').addEventListener('click', async () => {
+      clearMessages();
+      try{
+        const payload = {
+          is_open_override: 'auto',
+          bot_enabled: false,
+          kitchen_closed: false,
+          delivery_enabled: false,
+          pickup_enabled: false,
+          pasta_available: true,
+          delay_pasta_minutes: 0,
+          delay_schotels_minutes: 0,
+          ttl_minutes: 1
+        };
+        await apiPost('/admin/toggles', payload);
+        document.getElementById('saveMsg').style.display = 'inline';
+        await loadStatus();
+      } catch(e){
+        document.getElementById('errMsg').textContent = String(e.message || e);
+      }
+    });
+
+    function collectPayload(){
+      return {
+        bot_enabled: document.getElementById('bot_enabled').checked,
+        kitchen_closed: document.getElementById('kitchen_closed').checked,
+        is_open_override: document.getElementById('is_open_override').value,
+        delivery_enabled: document.getElementById('delivery_enabled').checked,
+        pickup_enabled: document.getElementById('pickup_enabled').checked,
+        pasta_available: document.getElementById('pasta_available').checked,
+        delay_pasta_minutes: num('delay_pasta_minutes'),
+        delay_schotels_minutes: num('delay_schotels_minutes'),
+        ttl_minutes: num('ttl_minutes'),
+      };
+    }
+    function num(id){
+      const v = parseInt(document.getElementById(id).value, 10);
+      return Number.isFinite(v) ? v : 0;
+    }
+    function clearMessages(){
+      document.getElementById('saveMsg').style.display = 'none';
+      document.getElementById('errMsg').textContent = '';
+    }
+
+    setLoggedIn(false);
+  </script>
 </body>
 </html>
