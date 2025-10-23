@@ -1,38 +1,66 @@
-# Mada Belbot - Twilio Voice webhook (no forwarding; time-based closed greeting)
+# Mada Belbot + Dashboard security (Basic Auth via env)
 
 from datetime import datetime, time
-import os, json
-from fastapi import FastAPI, Response, Depends, HTTPException
+import os, json, secrets, base64
+from fastapi import FastAPI, Response, Depends, HTTPException, status, APIRouter
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from pydantic import BaseModel, Field
+from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from zoneinfo import ZoneInfo
+from pydantic import BaseModel, Field
 from redis import Redis
 
 app = FastAPI(title="Adams Belbot")
 
 # ===== Config =====
 TZ = ZoneInfo("Europe/Amsterdam")
-OPEN_START, OPEN_END = time(16, 0), time(22, 0)          # 16:00–22:00
-DELIVERY_START, DELIVERY_END = time(17, 0), time(21, 30) # 17:00–21:30
+OPEN_START, OPEN_END = time(16, 0), time(22, 0)
+DELIVERY_START, DELIVERY_END = time(17, 0), time(21, 30)
 
-CALLER_ID      = "0226354645"  # Twilio callerId
-FALLBACK_PHONE = "0226427541"  # tijdelijk uitgeschakeld (geen forwarding)
+CALLER_ID = "0226354645"
+FALLBACK_PHONE = "0226427541"
 
-# Auth
+# ===== Auth =====
 security = HTTPBasic()
-ADMIN_USER = "admin"
-ADMIN_PASS = "AdamAdam2513"
-def auth(creds: HTTPBasicCredentials = Depends(security)):
-    if creds.username != ADMIN_USER or creds.password != ADMIN_PASS:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "changeme")
+
+def require_admin(creds: HTTPBasicCredentials = Depends(security)):
+    u_ok = secrets.compare_digest(creds.username, ADMIN_USER)
+    p_ok = secrets.compare_digest(creds.password, ADMIN_PASS)
+    if not (u_ok and p_ok):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
     return True
+
+# ===== Middleware voor dashboardbeveiliging =====
+class BasicAuthStaticMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        if path.startswith("/admin/ui"):
+            auth = request.headers.get("Authorization", "")
+            if not auth.startswith("Basic "):
+                return Response(status_code=401, headers={"WWW-Authenticate": "Basic"})
+            try:
+                user, pwd = base64.b64decode(auth.split(" ", 1)[1]).decode().split(":", 1)
+            except Exception:
+                return Response(status_code=401, headers={"WWW-Authenticate": "Basic"})
+            ok = secrets.compare_digest(user, ADMIN_USER) and secrets.compare_digest(pwd, ADMIN_PASS)
+            if not ok:
+                return Response(status_code=401, headers={"WWW-Authenticate": "Basic"})
+        return await call_next(request)
+
+app.add_middleware(BasicAuthStaticMiddleware)
 
 # ===== Redis =====
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 r = Redis.from_url(REDIS_URL, decode_responses=True)
 KEY_OVERRIDES = "belbot:overrides"
 
-# ===== Modellen =====
+# ===== Datamodellen =====
 class TogglesIn(BaseModel):
     bot_enabled: bool = True
     kitchen_closed: bool = False
@@ -57,7 +85,7 @@ class RuntimeOut(BaseModel):
     delay_schotels_minutes: int
     window: dict
 
-# ===== Helpers =====
+# ===== Logica =====
 def _auto(now: datetime):
     t = now.time()
     open_now = OPEN_START <= t < OPEN_END
@@ -136,45 +164,41 @@ def evaluate_status(now: datetime | None = None) -> RuntimeOut:
 NAME = "Ristorante Adams Spanbroek"
 REC = "Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren."
 
-G_DAY = f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}. {REC}"
-G_EVE = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. {REC}"
-G_CLOSED = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
-
 def select_greeting(now: datetime | None = None) -> str:
     now = now.astimezone(TZ) if now else datetime.now(TZ)
     t = now.time()
     st = evaluate_status(now)
-
-    # tijdsgebonden begroeting bij gesloten status
     if st.mode == "closed":
         if t < time(18, 0):
             return f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
         else:
             return f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
-
-    return G_DAY if t < time(18, 0) else G_EVE
+    return "Goedemiddag" if t < time(18, 0) else "Goedenavond"
 
 # ===== Endpoints =====
-@app.get("/runtime/status", response_model=RuntimeOut)
+@app.get("/runtime/status", response_model=RuntimeOut, dependencies=[Depends(require_admin)])
 def runtime_status():
     return evaluate_status()
 
 @app.api_route("/voice/incoming", methods=["GET", "POST"])
 def voice_incoming():
     st = evaluate_status()
-
-    # tijdelijk geen doorverbinding (altijd Mada)
     text = select_greeting()
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say language="nl-NL">{text}</Say>
-</Response>"""
+<Response><Say language="nl-NL">{text}</Say></Response>"""
     return Response(content=twiml, media_type="text/xml")
 
-@app.post("/admin/toggles", dependencies=[Depends(auth)], response_model=RuntimeOut)
+@app.post("/admin/toggles", dependencies=[Depends(require_admin)], response_model=RuntimeOut)
 def set_toggles(body: TogglesIn):
     valid = {0, 10, 20, 30, 45, 60}
     if body.delay_pasta_minutes not in valid or body.delay_schotels_minutes not in valid:
         raise HTTPException(status_code=400, detail="Delay must be one of 0,10,20,30,45,60")
     _save_overrides(body)
     return evaluate_status()
+
+# ===== Static dashboard =====
+app.mount("/admin/ui", StaticFiles(directory="admin_ui", html=True), name="admin_ui")
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
