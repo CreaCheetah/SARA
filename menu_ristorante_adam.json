@@ -1,0 +1,645 @@
+{
+  "meta": {
+    "restaurant": "Ristorante Adam",
+    "currency": "EUR"
+  },
+  "categories": [
+    {
+      "name": "Voorgerechten",
+      "items": [
+        {
+          "code": "01",
+          "name": "Toscaanse broodjes met kruidenboter",
+          "price": 4.0
+        },
+        {
+          "code": "03",
+          "name": "Caesar salade",
+          "price": 9.0
+        },
+        {
+          "code": "04",
+          "name": "Funghi Trifolati (gebakken champignons, knoflook, peterselie in wijnsaus)",
+          "price": 10.0
+        },
+        {
+          "code": "05",
+          "name": "Insalata di Mozzarella",
+          "price": 10.0
+        },
+        {
+          "code": "07",
+          "name": "Griekse Salade",
+          "price": 13.0
+        },
+        {
+          "code": "08",
+          "name": "Gemengde salade met feta kaas",
+          "price": 13.0
+        },
+        {
+          "code": "09",
+          "name": "Carpaccio (dun gesneden biologische ossenhaas)",
+          "price": 13.0
+        }
+      ],
+      "category_id": "VG"
+    },
+    {
+      "name": "Pasta's",
+      "note": "Keuze uit tagliatelle, spaghetti of penne. Alle pasta’s worden geserveerd met kaas.",
+      "items": [
+        {
+          "code": "07",
+          "name": "Bolognese",
+          "price": 14.0
+        },
+        {
+          "code": "08",
+          "name": "Gehakt en tomatensaus",
+          "price": 14.0
+        },
+        {
+          "code": "09",
+          "name": "Funghi (champignons in roomsaus)",
+          "price": 15.0
+        },
+        {
+          "code": "10",
+          "name": "Vegetariana (groenten in tomatensaus)",
+          "price": 14.0
+        },
+        {
+          "code": "11",
+          "name": "Carbonara (spek, ei en roomsaus)",
+          "price": 15.0
+        },
+        {
+          "code": "12",
+          "name": "Quattro Formaggi (vier soorten Italiaanse kaas)",
+          "price": 16.0
+        },
+        {
+          "code": "13",
+          "name": "Tortellini",
+          "price": 16.0
+        },
+        {
+          "code": "14",
+          "name": "A la Gamberetti (garnalen, roomsaus en basilicum)",
+          "price": 17.0
+        },
+        {
+          "code": "15",
+          "name": "Salmone (gerookte zalm met tomatenroomsaus, whiskey, tomaat, ui en basilicum-olie)",
+          "price": 18.0
+        },
+        {
+          "code": "16",
+          "name": "Pasta van 't Huis (gesmolten kaas, ham, champignons, ui en basilicum in roomsaus)",
+          "price": 17.0
+        },
+        {
+          "code": "16b",
+          "name": "Pasta Alfredo (kipfilet, spinazie, champignon, Parmezaanse kaas, mozzarella, knoflookolie en pesto)",
+          "price": 18.0
+        },
+        {
+          "code": "17",
+          "name": "Lasagne al Forno (Bolognese)",
+          "price": 15.0
+        }
+      ],
+      "category_id": "PA"
+    },
+    {
+      "name": "Calzone's (dichtgeslagen pizza's)",
+      "items": [
+        {
+          "code": "18",
+          "name": "Pollo",
+          "price": 15.0
+        },
+        {
+          "code": "19",
+          "name": "Dichtgeslagen pizza met kaas, kipfilet en satésaus",
+          "price": 15.0
+        },
+        {
+          "code": "20",
+          "name": "Bolognese (kaas, tomaat, gehaktsaus, paprika, champignons, ui, ham en salami)",
+          "price": 15.0
+        },
+        {
+          "code": "21",
+          "name": "Shoarma — Kaas en shoarma",
+          "variant_prices": {
+            "varken": 16.0,
+            "kip": 16.0,
+            "lams": 17.0
+          }
+        },
+        {
+          "code": "22",
+          "name": "Shoarma Special — Kaas, paprika, champignons, ui en shoarma",
+          "variant_prices": {
+            "varken": 17.0,
+            "kip": 17.0,
+            "lams": 18.0
+          }
+        },
+        {
+          "code": "23",
+          "name": "Calzone Adam — Kipfilet, feta kaas, paprika, champignons en ui",
+          "price": 17.0
+        },
+        {
+          "code": "24",
+          "name": "Calzone Mimo — Kaas, kipfilet, ham, salami, shoarma, champignons en knoflooksaus",
+          "price": 17.0
+        },
+        {
+          "code": "25",
+          "name": "Calzone Spareribs — Kaas, vlees van spareribs (zonder botjes)",
+          "price": 20.0
+        },
+        {
+          "code": "26",
+          "name": "Calzone Döner — Kaas en döner",
+          "price": 16.0
+        }
+      ],
+      "category_id": "CZ"
+    },
+    {
+      "name": "Pizza's",
+      "footnote": "Op kinderpizza’s (kleiner formaat) krijg je €1,50 korting.",
+      "items": [
+        {
+          "code": "26",
+          "name": "Margherita",
+          "desc": "Kaas en tomatensaus",
+          "price": 10.0
+        },
+        {
+          "code": "27",
+          "name": "Cipolla",
+          "desc": "Kaas, tomatensaus en ui",
+          "price": 12.0
+        },
+        {
+          "code": "28",
+          "name": "Funghi",
+          "desc": "Kaas, tomatensaus en champignons",
+          "price": 12.0
+        },
+        {
+          "code": "29",
+          "name": "Italiana",
+          "desc": "Kaas, tomatensaus, spinazie, paprika en ui",
+          "price": 13.0
+        },
+        {
+          "code": "30",
+          "name": "Vegetariana",
+          "desc": "Kaas, tomatensaus, champignons, paprika, artisjokken, ui en olijven",
+          "price": 14.0
+        },
+        {
+          "code": "31",
+          "name": "Ananas",
+          "desc": "Kaas, tomatensaus en ananas",
+          "price": 12.0
+        },
+        {
+          "code": "32",
+          "name": "Hawaii",
+          "desc": "Kaas, tomatensaus, ham en ananas",
+          "price": 14.0
+        },
+        {
+          "code": "33",
+          "name": "Mozzarella",
+          "desc": "Kaas, tomatensaus, basilicum, mozzarella en verse tomaten",
+          "price": 13.0
+        },
+        {
+          "code": "34",
+          "name": "Borromea",
+          "desc": "Kaas, tomatensaus en ham",
+          "price": 12.0
+        },
+        {
+          "code": "35",
+          "name": "Salami",
+          "desc": "Kaas, tomatensaus en salami",
+          "price": 14.0
+        },
+        {
+          "code": "36",
+          "name": "Pepperoni",
+          "desc": "Kaas, tomatensaus, pepperoni en Spaanse peper",
+          "price": 14.0
+        },
+        {
+          "code": "37",
+          "name": "Bolognese",
+          "desc": "Kaas, tomatensaus en gehaktsaus",
+          "price": 13.0
+        },
+        {
+          "code": "38",
+          "name": "Capricciosa",
+          "desc": "Kaas, tomatensaus, ham en champignons",
+          "price": 14.0
+        },
+        {
+          "code": "39",
+          "name": "Casanova",
+          "desc": "Kaas, tomatensaus, ham en ei",
+          "price": 14.0
+        },
+        {
+          "code": "40",
+          "name": "Tonijn",
+          "desc": "Kaas, tomatensaus, tonijn, ui en knoflook",
+          "price": 13.0
+        },
+        {
+          "code": "41",
+          "name": "Meridionale",
+          "desc": "Kaas, tomatensaus, ui, champignons, ham en salami",
+          "price": 14.0
+        },
+        {
+          "code": "42",
+          "name": "Quattro Stagioni",
+          "desc": "Kaas, tomatensaus, salami, ham, champignons, paprika en oregano",
+          "price": 15.0
+        },
+        {
+          "code": "43",
+          "name": "Quattro Formaggi",
+          "desc": "Tomatensaus en vier soorten kaas",
+          "price": 15.0
+        },
+        {
+          "code": "44",
+          "name": "Venezia",
+          "desc": "Kaas, tomatensaus, salami, ham, paprika, champignons, ui en ananas",
+          "price": 15.0
+        },
+        {
+          "code": "45",
+          "name": "Napoli",
+          "desc": "Kaas, tomatensaus, olijven, kappertjes en ansjovis",
+          "price": 13.0
+        },
+        {
+          "code": "46",
+          "name": "Frutti di Mare",
+          "desc": "Kaas, tomatensaus en zeevruchten",
+          "price": 15.0
+        },
+        {
+          "code": "47",
+          "name": "Shoarma",
+          "price": 16.0
+        },
+        {
+          "code": "48",
+          "name": "Shoarma Lams of Kip",
+          "price": 16.0
+        },
+        {
+          "code": "49",
+          "name": "Shoarma Special",
+          "desc": "Kaas, tomatensaus, shoarma, paprika, ui en champignons",
+          "variant_prices": {
+            "varken": 16.0,
+            "kip": 16.0,
+            "lams": 17.0
+          }
+        },
+        {
+          "code": "50",
+          "name": "Döner",
+          "desc": "Kaas, tomatensaus en gekruide döner",
+          "price": 15.0
+        },
+        {
+          "code": "51",
+          "name": "Zalm",
+          "desc": "Kaas, tomatensaus, zalm, verse ui en dille",
+          "price": 17.0
+        },
+        {
+          "code": "52",
+          "name": "Wubbo Ockels",
+          "desc": "Kipshoarma, regiokaas, salami, paprika, ham, ananas en champignons",
+          "price": 15.0
+        },
+        {
+          "code": "53",
+          "name": "Pizza Opmeer",
+          "desc": "Kaas, tomatensaus, ham, salami, bacon, ui en ei",
+          "price": 16.0
+        },
+        {
+          "code": "54",
+          "name": "Pizza Spanbroek",
+          "desc": "Kaas, tomatensaus, gegrilde kip, bacon, paprika, champignons en ui",
+          "price": 16.0
+        },
+        {
+          "code": "55",
+          "name": "Pizza Hoogwoud",
+          "desc": "Kaas, tomatensaus, shoarma, kipshoarma en döner",
+          "price": 17.0
+        },
+        {
+          "code": "56",
+          "name": "Pizza Crazy Jalapeño",
+          "desc": "Kaas, tomatensaus, mozzarella, ui, champignon, pepperoni, gegrilde kipfilet en pittige jalapeño",
+          "price": 17.0
+        },
+        {
+          "code": "57",
+          "name": "Pizza Sweety Chicken",
+          "desc": "Kaas, tomatensaus, ui, paprika, gegrilde kipfilet en mango chutney",
+          "price": 20.0
+        },
+        {
+          "code": "58",
+          "name": "Pizza Spareribs",
+          "desc": "Kaas, vlees van spareribs (zonder botjes)",
+          "price": 16.0
+        },
+        {
+          "code": "59",
+          "name": "Pizza Taco Mexicano",
+          "desc": "Tomatensaus, kaas, rundvlees gemarineerd met Mexicaanse kruiden en tacosaus, rode ui, mais, mozzarella en jalapeño",
+          "price": 16.0
+        },
+        {
+          "code": "60",
+          "name": "Pizza Kipsaté",
+          "desc": "Satésaus, gegrilde kipfilet, mozzarella en ui",
+          "price": 16.0
+        },
+        {
+          "code": "61",
+          "name": "Pizza BBQ Chicken",
+          "desc": "BBQ saus, mozzarella, ui, paprika, gegrilde kipfilet, mais en bbq swirl",
+          "price": 17.0
+        }
+      ],
+      "category_id": "PZ"
+    },
+    {
+      "name": "Schotels",
+      "note": "Alle schotels worden geserveerd met patat, salade en sauzen.",
+      "items": [
+        {
+          "code": "62",
+          "name": "Shoarma",
+          "variant_prices": {
+            "varken": 17.0,
+            "kip": 16.0,
+            "lams": 18.0
+          }
+        },
+        {
+          "code": "63",
+          "name": "Kindermenu",
+          "variant_prices": {
+            "varken": 12.0,
+            "kip": 12.0,
+            "lams": 13.0
+          }
+        },
+        {
+          "code": "64",
+          "name": "Shoarma van 't huis",
+          "variant_prices": {
+            "varken": 18.0,
+            "kip": 17.0,
+            "lams": 19.0
+          }
+        },
+        {
+          "code": "65",
+          "name": "Gebakken paprika, champignons, ui en gesmolten kaas",
+          "price": 16.0
+        },
+        {
+          "code": "66",
+          "name": "Döner schotel",
+          "price": 16.0
+        },
+        {
+          "code": "67",
+          "name": "Kofta (gekruid gehakt uit eigen keuken)",
+          "price": 17.0
+        },
+        {
+          "code": "67b",
+          "name": "Mix Grill Diavolla — Shoarma, shaslick, kipfilet en kofta",
+          "price": 22.0
+        },
+        {
+          "code": "68",
+          "name": "Mix Grill Kardo — Shoarma, shaslick, kofta, kipfilet en spare-ribs",
+          "price": 25.0
+        }
+      ],
+      "category_id": "SC"
+    },
+    {
+      "name": "Kapsalons",
+      "note": "Met patat, shoarma, salade en gesmolten kaas.",
+      "items": [
+        {
+          "code": "69",
+          "name": "Kapsalon",
+          "variant_prices": {
+            "döner": 12.0,
+            "varken": 12.0,
+            "kip": 12.0,
+            "lams": 14.0
+          }
+        },
+        {
+          "code": "70",
+          "name": "Kapsalon alla Job (extra veel vlees)",
+          "variant_prices": {
+            "döner": 15.0,
+            "varken": 16.0,
+            "kip": 15.0,
+            "lams": 17.0
+          }
+        },
+        {
+          "code": "71",
+          "name": "Kapsalon kipfilet",
+          "price": 16.0
+        }
+      ],
+      "category_id": "KS"
+    },
+    {
+      "name": "Hoofdgerechten",
+      "note": "Alle hoofdgerechten worden geserveerd met patat en salade.",
+      "items": [
+        {
+          "code": "72",
+          "name": "Kipfilet — Van de grill met gebakken ui, paprika en mango-chutney",
+          "price": 17.0
+        },
+        {
+          "code": "73",
+          "name": "Kipsaté — Kipfilet en satésaus",
+          "price": 16.0
+        },
+        {
+          "code": "74",
+          "name": "Varkenssate — Varkenshaas en satésaus",
+          "price": 17.0
+        },
+        {
+          "code": "75",
+          "name": "Spare-Ribs — Keuze uit zoet of hot",
+          "price": 20.0
+        },
+        {
+          "code": "76",
+          "name": "Kalfs spare-ribs (Halal)",
+          "price": 26.0
+        },
+        {
+          "code": "77",
+          "name": "Kip di Casa — Kipfilet in roomsaus met paprika, champignons en uien",
+          "price": 17.0
+        },
+        {
+          "code": "78",
+          "name": "Haas di Casa — Varkenshaas in roomsaus met paprika, champignons en uien",
+          "price": 18.0
+        },
+        {
+          "code": "79",
+          "name": "Biefstuk (200 gram) — Van de grill met peper- of champignonsaus",
+          "price": 25.0
+        },
+        {
+          "code": "80",
+          "name": "Ossenhaas (200 gram) — Van de grill met peper- of champignonsaus",
+          "price": 30.0
+        }
+      ],
+      "category_id": "HG"
+    },
+    {
+      "name": "Broodjes",
+      "items": [
+        {
+          "code": "81",
+          "name": "Broodje shoarma",
+          "variant_prices": {
+            "varken": 10.0,
+            "kip": 10.0,
+            "lams": 12.0
+          }
+        },
+        {
+          "code": "82",
+          "name": "Broodje Döner",
+          "price": 9.0
+        },
+        {
+          "code": "83",
+          "name": "Broodje Adam — Ham, shoarma, ananas en gesmolten kaas",
+          "price": 12.0
+        },
+        {
+          "code": "84",
+          "name": "Pita Kaas",
+          "price": 4.0
+        },
+        {
+          "code": "85",
+          "name": "Pita Ham/Kaas",
+          "price": 5.0
+        }
+      ],
+      "category_id": "BR"
+    },
+    {
+      "name": "Extra's",
+      "items": [
+        {
+          "code": "86",
+          "name": "Sauzen: knoflooksaus, zoete uiensaus, pikante uiensaus, mayonaise",
+          "price": 1.0
+        },
+        {
+          "code": "87",
+          "name": "Bakje Satésaus",
+          "price": 2.0
+        },
+        {
+          "code": "88",
+          "name": "Sambal",
+          "price": 1.0
+        },
+        {
+          "code": "89",
+          "name": "Extra patat",
+          "price": 4.0
+        },
+        {
+          "code": "90",
+          "name": "Pita broodje",
+          "price": 1.0
+        }
+      ],
+      "category_id": "EX"
+    },
+    {
+      "name": "Dranken en desserts",
+      "items": [
+        {
+          "code": "91",
+          "name": "Cola of Fanta",
+          "price": 3.0
+        },
+        {
+          "code": "92",
+          "name": "Blik bier Heineken",
+          "price": 3.0
+        },
+        {
+          "code": "93",
+          "name": "Fles rode, witte of rosé wijn",
+          "price": 17.5
+        },
+        {
+          "code": "94",
+          "name": "Fles Lambrusco",
+          "price": 12.0
+        },
+        {
+          "code": "95",
+          "name": "Tiramisu",
+          "price": 7.0
+        },
+        {
+          "code": "96",
+          "name": "Ben & Jerry’s ijs 100 ml (smaken: Strawberry Cheesecake, Caramel Chew Chew, Cookie Dough, Chocolate Fudge Brownie, Cone Together)",
+          "price": 3.5
+        }
+      ],
+      "category_id": "DR"
+    }
+  ]
+}
