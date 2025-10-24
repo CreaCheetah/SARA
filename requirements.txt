@@ -1,9 +1,9 @@
-fastapi[all]
+fastapi
 uvicorn
 tzdata
 pydantic
 redis>=5.0
 python-dotenv
 twilio
-websockets
+httpx
 websockets>=12.0
