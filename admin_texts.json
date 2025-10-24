@@ -1,0 +1,9 @@
+{
+  "restaurant_name": "Ristorante Adam Spanbroek",
+  "recording_notice": "Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren.",
+  "greeting_day": "Goedemiddag, u spreekt met Mada, de digitale assistent van {name}. {rec}",
+  "greeting_evening": "Goedenavond, u spreekt met Mada, de digitale assistent van {name}. {rec}",
+  "greeting_closed_day": "Goedemiddag, u spreekt met Mada, de digitale assistent van {name}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds.",
+  "greeting_closed_evening": "Goedenavond, u spreekt met Mada, de digitale assistent van {name}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds.",
+  "closed_reason": "We zijn op dit moment gesloten."
+}
