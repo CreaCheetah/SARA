@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Belservice • Live instellingen</title>
+<title>Mada AI Assistent • Live instellingen</title>
 <style>
-  :root{--bg1:#e9f2eb;--bg2:#efe8e6;--card:#fff;--ink:#0f1720;--muted:#6b7280;--line:#e5e7eb;--green:#138a43;--red:#c52e34}
+  :root{--bg-open:#e9f2eb;--bg-closed:#f4e9e9;--card:#fff;--ink:#0f1720;--muted:#6b7280;--line:#e5e7eb;--green:#138a43;--red:#c52e34}
   *{box-sizing:border-box}
-  body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);
-    background:radial-gradient(1200px 600px at 10% 10%,var(--bg1),var(--bg2))}
-  .wrap{max-width:900px;margin:20px auto;padding:0 20px} /* mobiel padding iets groter */
+  body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);background:var(--bg-open);transition:background .2s}
+  body.mode-closed{background:var(--bg-closed)}
+  .wrap{max-width:1000px;margin:20px auto;padding:0 16px}
   header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px}
   .brand{display:flex;align-items:center;gap:10px}
   .flag{width:22px;height:22px;border-radius:6px;background:linear-gradient(90deg,#1e9b3f 33%,#fff 33% 66%,#d21f2b 0)}
@@ -20,24 +20,45 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 24px rgba(0,0,0,.08);padding:18px}
   .card h2{margin:0 0 8px}
   .sub{color:var(--muted);margin:0 0 12px}
+
+  /* statuskaarten */
+  .status3{display:grid;grid-template-columns:1fr;gap:10px}
+  @media(min-width:520px){.status3{grid-template-columns:1fr 1fr 1fr}}
+  .stat{border:1px solid var(--line);border-radius:14px;padding:14px 12px;text-align:center;font-weight:700}
+  .stat .ttl{display:block;font-weight:600;color:var(--muted);margin-bottom:6px}
+  .ok{color:var(--green)}
+  .no{color:var(--red)}
+
+  /* switches en sliders */
   .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;margin:10px 0}
   .row label{font-weight:600}
   .switch{width:46px;height:28px;border-radius:999px;background:#e5e7eb;position:relative;cursor:pointer;flex:0 0 auto}
   .switch input{display:none}
   .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:all .2s}
-  .switch input:checked + .knob{left:21px;background:#fff}
+  .switch input:checked + .knob{left:21px}
   .switch input:checked ~ .bg{background:var(--green)}
+  .switch.disabled{opacity:.5;pointer-events:none}
   .bg{position:absolute;inset:0;border-radius:999px;transition:background .2s}
-  .select{display:flex;gap:8px;align-items:center}
-  select{padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+
+  .range{display:flex;align-items:center;gap:10px;width:100%}
+  input[type="range"]{width:100%}
+  .badge{min-width:38px;text-align:center;border:1px solid var(--line);border-radius:10px;padding:4px 8px;color:var(--muted);font-weight:700}
+
   .modes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
   .mode{padding:12px;border:1px solid var(--line);border-radius:14px;text-align:center;cursor:pointer}
   .mode input{margin-right:6px}
-  .ok{color:var(--green);font-weight:700}
-  .no{color:var(--red);font-weight:700}
-  .actions{display:flex;align-items:center;gap:12px;margin-top:12px}
+
+  .actions{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;margin-top:12px;background:var(--card);padding:12px;border-radius:14px;border:1px solid var(--line)}
   .btn{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;color:#fff;background:var(--green)}
+  .btn.ok{background:var(--green)}
+  .btn.err{background:var(--red)}
   .muted{color:var(--muted)}
+
+  @media(max-width:420px){
+    .wrap{padding:0 12px}
+    .grid{gap:16px}
+    .card{padding:14px}
+  }
 </style>
 </head>
 <body>
@@ -46,20 +67,22 @@
       <button class="back" onclick="location.href='/admin/ui/index.html'">Terug</button>
       <div class="brand">
         <div class="flag"></div>
-        <h1>Belservice • Live instellingen</h1>
+        <h1>Mada AI Assistent • Live instellingen</h1>
       </div>
       <span></span>
     </header>
 
     <div class="grid">
       <!-- Status -->
-      <section class="card">
+      <section class="card" aria-live="polite">
         <h2>Status</h2>
         <p class="sub">Actuele toestand volgens runtime.</p>
-        <div class="row"><label>Open/dicht:</label><strong id="mode" class="">…</strong></div>
-        <div class="row"><label>Bezorging:</label><strong id="delivery" class="">…</strong></div>
-        <div class="row"><label>Bot actief:</label><strong id="bot" class="">…</strong></div>
-        <div class="row"><label>Tijdvenster:</label><span id="win" class="muted">…</span></div>
+        <div class="status3">
+          <div class="stat"><span class="ttl">Restaurant</span><span id="st_open" class="">…</span></div>
+          <div class="stat"><span class="ttl">Bezorging</span><span id="st_delivery" class="">…</span></div>
+          <div class="stat"><span class="ttl">Mada</span><span id="st_bot" class="">…</span></div>
+        </div>
+        <p class="sub" id="win" style="margin-top:8px"></p>
       </section>
 
       <!-- Instellingen -->
@@ -68,37 +91,39 @@
 
         <div class="row">
           <label for="bot_enabled">Belbot actief</label>
-          <label class="switch">
-            <input id="bot_enabled" type="checkbox" />
+          <label class="switch" id="sw_bot">
+            <input id="bot_enabled" type="checkbox" aria-label="Belbot actief" />
             <span class="bg"></span><span class="knob"></span>
           </label>
         </div>
 
         <div class="row">
-          <label for="pasta_available">Pasta’s beschikbaar</label>
-          <label class="switch">
-            <input id="pasta_available" type="checkbox" />
+          <label for="pasta_available">Pizza’s beschikbaar</label>
+          <label class="switch" id="sw_pizza">
+            <input id="pasta_available" type="checkbox" aria-label="Pizza’s beschikbaar" />
             <span class="bg"></span><span class="knob"></span>
           </label>
         </div>
 
-        <div class="row select">
-          <label for="delay_pasta_minutes">Vertraging pasta</label>
-          <select id="delay_pasta_minutes">
-            <option>0</option><option>10</option><option>20</option><option>30</option><option>45</option><option>60</option>
-          </select>
+        <div class="row">
+          <label>Vertraging pizza</label>
+          <div class="range">
+            <input id="delay_pasta_minutes" type="range" min="0" max="60" step="5" aria-label="Vertraging pizza" />
+            <span class="badge" id="badge_pasta">0</span>
+          </div>
         </div>
 
-        <div class="row select">
-          <label for="delay_schotels_minutes">Vertraging schotels</label>
-          <select id="delay_schotels_minutes">
-            <option>0</option><option>10</option><option>20</option><option>30</option><option>45</option><option>60</option>
-          </select>
+        <div class="row">
+          <label>Vertraging schotels</label>
+          <div class="range">
+            <input id="delay_schotels_minutes" type="range" min="0" max="60" step="5" aria-label="Vertraging schotels" />
+            <span class="badge" id="badge_schotels">0</span>
+          </div>
         </div>
 
         <div class="row">
           <label>Modus</label>
-          <div class="modes">
+          <div class="modes" role="radiogroup" aria-label="Modus">
             <label class="mode"><input type="radio" name="mode" value="auto" checked>Auto</label>
             <label class="mode"><input type="radio" name="mode" value="open">Open</label>
             <label class="mode"><input type="radio" name="mode" value="closed">Gesloten</label>
@@ -107,8 +132,8 @@
 
         <div class="row">
           <label for="delivery_enabled">Bezorging actief</label>
-          <label class="switch">
-            <input id="delivery_enabled" type="checkbox" checked />
+          <label class="switch" id="sw_delivery">
+            <input id="delivery_enabled" type="checkbox" aria-label="Bezorging actief" />
             <span class="bg"></span><span class="knob"></span>
           </label>
         </div>
@@ -122,7 +147,6 @@
     </div>
   </div>
 
-  <!-- verwijzing naar extern script -->
-  <script src="/admin/ui/live.js"></script>
+<script src="live.js"></script>
 </body>
 </html>
