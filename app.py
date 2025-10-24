@@ -1,6 +1,6 @@
-# Mada Belbot - Twilio Voice webhook + Dashboard API (OpenAI TTS begroeting + stabiele stream)
+# Mada Belbot – OpenAI TTS intro + GPT-4o Realtime dialoog (NL) + Dashboard API
 
-import os, json
+import os, json, base64, audioop, asyncio
 from datetime import datetime, time
 from pathlib import Path
 from typing import Optional, Literal
@@ -13,18 +13,23 @@ from zoneinfo import ZoneInfo
 from redis import Redis
 from redis.exceptions import RedisError
 import httpx
+import websockets
 
 # ===== Init =====
 app = FastAPI(title="Adams Belbot")
 security = HTTPBasic()
 
-# ===== Config & Auth =====
+# ===== Config =====
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "CHANGE_ME")
 TZ = ZoneInfo(os.getenv("TZ", "Europe/Amsterdam"))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-4o-realtime-preview-2024-12-17")
+OPENAI_REALTIME_URL = f"wss://api.openai.com/v1/realtime?model={OPENAI_REALTIME_MODEL}"
+RECORDING_ENABLED = os.getenv("RECORD_CALLS", "false").lower() == "true"
 
+# ===== Auth =====
 def auth(creds: HTTPBasicCredentials = Depends(security)) -> bool:
     if creds.username != ADMIN_USER or creds.password != ADMIN_PASS:
         raise HTTPException(status_code=401, detail="Unauthorized",
@@ -75,8 +80,7 @@ def _auto(now: datetime):
 def _load_overrides() -> Optional[TogglesIn]:
     try:
         raw = r.get(KEY_OVERRIDES)
-        if not raw:
-            return None
+        if not raw: return None
         return TogglesIn(**json.loads(raw))
     except (RedisError, json.JSONDecodeError, ValidationError):
         return None
@@ -146,7 +150,6 @@ def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
 
 # ===== Teksten =====
 NAME = "Ristorante Adam Spanbroek"
-RECORDING_ENABLED = os.getenv("RECORD_CALLS", "false").lower() == "true"
 REC_TXT = " Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren." if RECORDING_ENABLED else ""
 
 def select_greeting(now: Optional[datetime] = None) -> str:
@@ -158,43 +161,32 @@ def select_greeting(now: Optional[datetime] = None) -> str:
         return f"{dag}, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
     return f"{dag}, u spreekt met Mada, de digitale assistent van {NAME}. Waarmee kan ik u helpen vandaag?{REC_TXT}"
 
-# ===== OpenAI TTS MP3 =====
+# ===== API: runtime =====
+@app.get("/runtime/status", response_model=RuntimeOut)
+def runtime_status():
+    return evaluate_status()
+
+# ===== OpenAI TTS MP3 voor begroeting =====
 @app.get("/voice/intro.mp3")
 async def voice_intro_mp3():
-    """
-    Genereert NL-begroeting via OpenAI TTS (mp3).
-    """
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY missing")
-
     text = select_greeting()
     url = "https://api.openai.com/v1/audio/speech"
-    payload = {
-        "model": "gpt-4o-mini-tts",
-        "voice": "alloy",
-        "input": text,
-        "format": "mp3"
-    }
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    payload = {"model":"gpt-4o-mini-tts","voice":"alloy","input":text,"format":"mp3"}
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type":"application/json"}
     async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
         r = await client.post(url, headers=headers, json=payload)
     if r.status_code != 200:
         raise HTTPException(status_code=502, detail=f"OpenAI TTS error {r.status_code}")
     return StreamingResponse(iter([r.content]), media_type="audio/mpeg")
 
-# ===== Voice inkomend (Play + Stream) =====
-@app.api_route("/voice/incoming", methods=["GET", "POST"])
+# ===== TwiML: Play intro + start stream =====
+@app.api_route("/voice/incoming", methods=["GET","POST"])
 def voice_incoming():
-    """
-    1) Speelt OpenAI TTS-begroeting af (mp3).
-    2) Start Twilio Media Streams naar onze WebSocket zodat de call open blijft.
-    """
     host = os.getenv("RENDER_EXTERNAL_HOSTNAME", "mada-3ijw.onrender.com")
     from time import time as _now
-    cb = int(_now())  # cache-buster voor Twilio
+    cb = int(_now())
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Play>https://{host}/voice/intro.mp3?cb={cb}</Play>
@@ -204,23 +196,111 @@ def voice_incoming():
 </Response>"""
     return Response(content=twiml, media_type="text/xml")
 
-# ===== Twilio Media Stream WebSocket =====
+# ===== Audio conversie helpers (Twilio μ-law 8kHz <-> PCM16 16kHz) =====
+def mulaw_b64_to_pcm16k(b64: str) -> bytes:
+    pcm8k = audioop.ulaw2lin(base64.b64decode(b64), 2)
+    pcm16, _ = audioop.ratecv(pcm8k, 2, 1, 8000, 16000, None)
+    return pcm16
+
+def pcm16k_to_mulaw_b64(pcm16: bytes) -> str:
+    pcm8k, _ = audioop.ratecv(pcm16, 2, 1, 16000, 8000, None)
+    ulaw = audioop.lin2ulaw(pcm8k, 2)
+    return base64.b64encode(ulaw).decode()
+
+# ===== GPT-4o Realtime bridge (fail-safe) =====
+async def openai_connect():
+    if not OPENAI_API_KEY:
+        return None
+    headers = [("Authorization", f"Bearer {OPENAI_API_KEY}"), ("OpenAI-Beta", "realtime=v1")]
+    try:
+        # compat voor oude/nieuwe websockets argumentnaam
+        try:
+            conn = await websockets.connect(OPENAI_REALTIME_URL, extra_headers=headers, ping_interval=20, ping_timeout=20)
+        except TypeError:
+            conn = await websockets.connect(OPENAI_REALTIME_URL, additional_headers=headers, ping_interval=20, ping_timeout=20)
+        # sessie NL + korte antwoorden
+        await conn.send(json.dumps({
+            "type":"session.update",
+            "session":{
+                "voice":"alloy",
+                "input_audio_format":{"type":"pcm16","sample_rate":16000},
+                "output_audio_format":{"type":"pcm16","sample_rate":16000},
+                "instructions":(
+                    "Je heet Mada. Spreek alleen Nederlands. Antwoord kort en duidelijk. "
+                    "Respecteer deze statusregels: geen bezorging als bezorging uit staat; "
+                    "geen bestellingen als gesloten; noem eventuele extra bereidingstijden. "
+                    "Bied een alternatief als iets niet kan."
+                ),
+                "turn_detection":{"type":"server_vad"}
+            }
+        }))
+        return conn
+    except Exception:
+        return None
+
 @app.websocket("/twilio/stream")
 async def twilio_stream(ws: WebSocket):
-    """
-    Minimale, stabiele handler:
-    - accepteert de stream
-    - houdt de verbinding open zolang Twilio audio stuurt
-    - (dialoog via OpenAI Realtime komt later als aparte stap)
-    """
     await ws.accept()
+    oa = await openai_connect()  # mag None zijn, we blijven fail-safe
+
+    async def pump_twilio_to_openai():
+        try:
+            while True:
+                msg = await ws.receive_text()
+                evt = json.loads(msg)
+                et = evt.get("event")
+                if et == "media" and oa:
+                    b64 = evt["media"]["payload"]
+                    pcm16 = mulaw_b64_to_pcm16k(b64)
+                    await oa.send(json.dumps({
+                        "type":"input_audio_buffer.append",
+                        "audio": base64.b64encode(pcm16).decode()
+                    }))
+                elif et == "start" and oa:
+                    await oa.send(json.dumps({"type":"response.create", "response":{"modalities":["audio"]}}))
+                elif et == "stop":
+                    break
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            pass
+
+    async def pump_openai_to_twilio():
+        if not oa:
+            return
+        try:
+            async for raw in oa:
+                try:
+                    data = json.loads(raw)
+                except Exception:
+                    continue
+                t = data.get("type")
+                if t in ("response.audio.delta","output_audio.delta"):
+                    pcm16_b64 = data.get("delta") or data.get("audio")
+                    if pcm16_b64:
+                        ulaw_b64 = pcm16k_to_mulaw_b64(base64.b64decode(pcm16_b64))
+                        await ws.send_text(json.dumps({"event":"media","media":{"payload":ulaw_b64}}))
+                elif t in ("response.completed","response.stop"):
+                    await ws.send_text(json.dumps({"event":"mark","mark":{"name":"eor"}}))
+        except Exception:
+            pass
+
+    await asyncio.wait([
+        asyncio.create_task(pump_twilio_to_openai()),
+        asyncio.create_task(pump_openai_to_twilio()),
+    ], return_when=asyncio.FIRST_COMPLETED)
+
     try:
-        while True:
-            _ = await ws.receive_text()  # consume events
-    except WebSocketDisconnect:
+        await ws.close()
+    except Exception:
+        pass
+    try:
+        if oa:
+            await oa.close()
+    except Exception:
         pass
 
-# ===== Admin API (beschermd) =====
+# ===== Admin API =====
 @app.post("/admin/toggles", dependencies=[Depends(auth)], response_model=RuntimeOut)
 def set_toggles(body: TogglesIn):
     valid = {0, 10, 20, 30, 45, 60}
@@ -229,24 +309,23 @@ def set_toggles(body: TogglesIn):
     _save_overrides(body)
     return evaluate_status()
 
-# ===== Auth-protected Static Admin UI =====
+# ===== Admin UI (Basic Auth) =====
 BASE_DIR = Path(__file__).resolve().parent
 ADMIN_UI_DIR = BASE_DIR / "admin_ui"
 
 @app.get("/admin/ui/{path:path}", dependencies=[Depends(auth)])
 def admin_ui_any(path: str):
-    target = ADMIN_UI_DIR | Path(path or "index.html")
+    target = ADMIN_UI_DIR / (path or "index.html")
     if target.is_dir():
         target = target / "index.html"
     if not target.exists():
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(target)
 
-# ===== Logout =====
 @app.get("/admin/logout")
 def admin_logout():
     raise HTTPException(status_code=401, detail="Logged out",
-                        headers={"WWW-Authenticate": "Basic"})
+                        headers={"WWW-Authenticate":"Basic"})
 
 # ===== Health =====
 @app.get("/healthz")
