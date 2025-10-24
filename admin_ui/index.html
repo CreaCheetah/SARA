@@ -9,11 +9,12 @@
   body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);
     background:radial-gradient(1200px 600px at 10% 10%,var(--bg1),var(--bg2))}
   .wrap{max-width:1000px;margin:56px auto;padding:0 16px}
-  header{display:flex;align-items:center;gap:12px;justify-content:center;margin-bottom:22px}
+  header{display:flex;align-items:center;gap:12px;justify-content:space-between;margin-bottom:22px}
+  .brand{display:flex;align-items:center;gap:12px}
   .flag{width:28px;height:28px;border-radius:8px;background:linear-gradient(90deg,#1e9b3f 33%,#fff 33% 66%,#d21f2b 0);box-shadow:0 3px 10px rgba(0,0,0,.08)}
   h1{margin:0;font-size:28px}
-  .login{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:10px 0 18px}
-  .login input{padding:10px 12px;border-radius:12px;border:1px solid var(--line)}
+  .login-status{display:flex;align-items:center;gap:10px}
+  .login-status .check{font-weight:700}
   .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;background:#111;color:#fff}
   .muted{color:var(--muted)}
   .grid{display:grid;gap:18px;grid-template-columns:1fr}
@@ -24,28 +25,26 @@
   .cta{display:inline-block;padding:12px 14px;border-radius:12px;font-weight:800;color:#fff;text-decoration:none}
   .green{background:var(--green)}
   .red{background:var(--red)}
-  .tip{margin-top:14px;text-align:center;color:var(--muted)}
 </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <div class="flag"></div>
-      <h1>Belservice • Dashboard</h1>
+      <div class="brand">
+        <div class="flag"></div>
+        <h1>Belservice • Dashboard</h1>
+      </div>
+      <div class="login-status">
+        <span>Ingelogd als admin</span>
+        <span class="check">✓</span>
+        <button class="btn" onclick="window.location.href='/admin/logout'">Uitloggen</button>
+      </div>
     </header>
-
-    <!-- Login die de Basic token bewaart voor andere pagina's -->
-    <div class="login">
-      <input id="user" type="text" placeholder="admin" autocomplete="username" />
-      <input id="pass" type="password" placeholder="wachtwoord" autocomplete="current-password" />
-      <button class="btn" id="btnLogin">Inloggen</button>
-      <span id="loginMsg" class="muted"></span>
-    </div>
 
     <div class="grid">
       <section class="card">
         <h2>Live instellingen</h2>
-        <p>Belbot aan/uit, keukenstatus, bezorging/afhalen en extra bereidingstijd.</p>
+        <p>Beheer Mada belassistent.</p>
         <a class="cta green" href="live.html">Open live instellingen</a>
       </section>
 
@@ -55,41 +54,6 @@
         <a class="cta red" href="report.html">Open rapportage</a>
       </section>
     </div>
-
-    <p class="tip">Tip: maak van deze pagina een vaste link voor Adam.</p>
   </div>
-
-<script>
-  // Bewaar Basic Auth in sessionStorage zodat live.html hem kan gebruiken
-  function basicAuth(u,p){ return 'Basic ' + btoa(u + ':' + p); }
-  async function apiPing(auth){
-    const res = await fetch('/runtime/status', {headers:{'Authorization':auth,'Accept':'application/json'}});
-    return res.ok;
-  }
-  document.getElementById('btnLogin').addEventListener('click', async ()=>{
-    const u=document.getElementById('user').value.trim();
-    const p=document.getElementById('pass').value;
-    const auth=basicAuth(u,p);
-    document.getElementById('loginMsg').textContent='controleren…';
-    try{
-      const ok = await apiPing(auth);
-      if(ok){
-        sessionStorage.setItem('auth', auth);
-        document.getElementById('loginMsg').textContent='ingelogd';
-      } else {
-        sessionStorage.removeItem('auth');
-        document.getElementById('loginMsg').textContent='login mislukt';
-      }
-    }catch(e){
-      sessionStorage.removeItem('auth');
-      document.getElementById('loginMsg').textContent='login mislukt';
-    }
-  });
-
-  // Toon direct of je nog ingelogd bent
-  if(sessionStorage.getItem('auth')){
-    document.getElementById('loginMsg').textContent='ingelogd';
-  }
-</script>
 </body>
 </html>
