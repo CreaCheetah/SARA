@@ -6,7 +6,7 @@ from datetime import datetime, time
 from pathlib import Path
 from typing import Optional, Literal
 
-from fastapi import FastAPI, Response, Depends, HTTPException
+from fastapi import FastAPI, Response, Depends, HTTPException, WebSocket
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, ValidationError
@@ -24,9 +24,10 @@ ADMIN_PASS = os.getenv("ADMIN_PASS", "CHANGE_ME")
 TZ = ZoneInfo(os.getenv("TZ", "Europe/Amsterdam"))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-# opnames + doorschakelen
-RECORDING_ENABLED = os.getenv("RECORDING_ENABLED", "false").lower() == "true"
-FALLBACK_PHONE = os.getenv("FALLBACK_PHONE", "").strip()
+# Twilio
+TWILIO_CALLER_ID = os.getenv("TWILIO_CALLER_ID", "")      # optioneel: eigen callerId bij <Dial>
+FALLBACK_PHONE   = os.getenv("FALLBACK_PHONE", "")        # nummer zaak voor doorschakelen
+RENDER_HOST      = os.getenv("RENDER_EXTERNAL_HOSTNAME", "mada-3ijw.onrender.com")
 
 def auth(creds: HTTPBasicCredentials = Depends(security)) -> bool:
     if creds.username != ADMIN_USER or creds.password != ADMIN_PASS:
@@ -49,13 +50,13 @@ DELIVERY_START, DELIVERY_END = time(17, 0), time(21, 30)
 class TogglesIn(BaseModel):
     bot_enabled: bool = True
     kitchen_closed: bool = False
-    pasta_available: bool = True  # "pasta" veldnaam blijft ivm compatibiliteit met UI
+    pasta_available: bool = True
     delay_pasta_minutes: int = Field(default=0, ge=0)
     delay_schotels_minutes: int = Field(default=0, ge=0)
     is_open_override: Literal["auto", "open", "closed"] = "auto"
     delivery_enabled: Optional[bool] = None
     pickup_enabled: Optional[bool] = None
-    ttl_minutes: int = Field(default=180, ge=1, le=720)  # max 12 uur
+    ttl_minutes: int = Field(default=180, ge=1, le=720)
 
 class RuntimeOut(BaseModel):
     now: str
@@ -85,7 +86,7 @@ def _load_overrides() -> Optional[TogglesIn]:
             return None
         return TogglesIn(**json.loads(raw))
     except (RedisError, json.JSONDecodeError, ValidationError):
-        return None  # val veilig terug op defaults
+        return None
 
 def _save_overrides(body: TogglesIn):
     ttl = int(body.ttl_minutes) * 60
@@ -99,7 +100,6 @@ def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
     over = _load_overrides()
     open_auto, delivery_auto, pickup_auto = _auto(now)
 
-    # bepaal open/dicht
     if over and over.is_open_override == "closed":
         open_now = False
     elif over and over.is_open_override == "open":
@@ -107,7 +107,6 @@ def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
     else:
         open_now = open_auto
 
-    # keuken dicht -> alles dicht voor bestellingen
     if over and over.kitchen_closed:
         return RuntimeOut(
             now=now.isoformat(), mode="closed",
@@ -120,7 +119,6 @@ def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
             window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"},
         )
 
-    # buiten openingstijden
     if not open_now:
         return RuntimeOut(
             now=now.isoformat(), mode="closed",
@@ -134,16 +132,13 @@ def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
             window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"},
         )
 
-    # we zijn open
-    delivery = DELIVERY_START <= now.time() < DELIVERY_END
-    pickup = OPEN_START <= now.time() < OPEN_END
-
+    delivery = delivery_auto
+    pickup = pickup_auto
     if over:
-        # handmatige override wint zodra we open zijn
         if over.delivery_enabled is not None:
-            delivery = over.delivery_enabled
+            delivery = delivery and over.delivery_enabled
         if over.pickup_enabled is not None:
-            pickup = over.pickup_enabled
+            pickup = pickup and over.pickup_enabled
 
     return RuntimeOut(
         now=now.isoformat(), mode="open",
@@ -156,74 +151,73 @@ def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
         window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"},
     )
 
-# ===== Voice texts =====
+# ===== Voice teksten =====
 NAME = "Ristorante Adam Spanbroek"
+REC  = "Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren."
+G_DAY = f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}."
+G_EVE = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}."
+CLOSED = "We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
 
-def select_greeting(now: Optional[datetime] = None) -> str:
+def select_greeting(now: Optional[datetime] = None, include_rec: bool = True) -> str:
     now = now.astimezone(TZ) if now else datetime.now(TZ)
     t = now.time()
     st = evaluate_status(now)
-
-    hello = "Goedemiddag" if t < time(18, 0) else "Goedenavond"
-    parts: list[str] = []
-
+    prefix = G_DAY if t < time(18, 0) else G_EVE
     if st.mode == "closed":
-        parts.append(f"{hello}, u spreekt met Mada, de digitale assistent van {NAME}.")
-        parts.append("We zijn op dit moment gesloten, maar vanaf vier uur zijn we weer bereikbaar.")
-        return " ".join(parts)
+        return f"{prefix} {CLOSED}"
+    return f"{prefix} {REC}" if include_rec else prefix
 
-    # open
-    parts.append(f"{hello}, u spreekt met Mada, de digitale assistent van {NAME}. Waar kan ik u mee helpen?")
-
-    # delivery notice alleen als uit
-    if not st.delivery_enabled:
-        parts.append("Op dit moment is bezorgen niet mogelijk, maar afhalen kan wel.")
-
-    # pasta / menu beschikbaarheid
-    if not st.pasta_available:
-        parts.append("Pasta’s zijn tijdelijk niet beschikbaar.")
-
-    # vertragingen
-    if st.delay_pasta_minutes and st.delay_pasta_minutes > 0:
-        parts.append(f"Houd alstublieft rekening met ongeveer {st.delay_pasta_minutes} minuten extra bereidingstijd voor pasta’s.")
-    if st.delay_schotels_minutes and st.delay_schotels_minutes > 0:
-        parts.append(f"Er is op dit moment ongeveer {st.delay_schotels_minutes} minuten extra bereidingstijd voor schotels.")
-
-    # opnamezin alleen indien flag aan
-    if RECORDING_ENABLED:
-        parts.append("Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren.")
-
-    return " ".join(parts)
-
-# ===== Routes: runtime & voice =====
+# ===== Routes: runtime =====
 @app.get("/runtime/status", response_model=RuntimeOut)
 def runtime_status():
     return evaluate_status()
 
+# ===== Voice webhook: Media Streams of doorverbinden =====
 @app.api_route("/voice/incoming", methods=["GET", "POST"])
 def voice_incoming():
     st = evaluate_status()
-    # Als Mada uit staat: direct doorschakelen
-    if not st.bot_enabled:
-        if not FALLBACK_PHONE:
-            # geen fallback ingesteld -> hang op
-            return Response(
-                content='''<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>''',
-                media_type="text/xml",
-            )
+
+    # Bot uit -> direct doorverbinden met zaak
+    if not st.bot_enabled and FALLBACK_PHONE:
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial>{FALLBACK_PHONE}</Dial>
+  <Say language="nl-NL">{select_greeting(include_rec=False)}</Say>
+  <Dial{(' callerId="'+TWILIO_CALLER_ID+'"' if TWILIO_CALLER_ID else '')}>{FALLBACK_PHONE}</Dial>
 </Response>"""
         return Response(content=twiml, media_type="text/xml")
 
-    # Normale begroeting
-    text = select_greeting()
+    # Bot aan -> begroeting + start Twilio Media Stream naar onze WS
+    ws_url = f"wss://{RENDER_HOST}/twilio/stream"
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="nl-NL">{text}</Say>
+  <Say language="nl-NL">{select_greeting()}</Say>
+  <Connect>
+    <Stream url="{ws_url}"/>
+  </Connect>
 </Response>"""
     return Response(content=twiml, media_type="text/xml")
+
+# ===== WebSocket endpoint voor Twilio Media Streams =====
+@app.websocket("/twilio/stream")
+async def twilio_stream(ws: WebSocket):
+    await ws.accept()
+    try:
+        while True:
+            msg = await ws.receive_json()
+            ev = msg.get("event")
+            if ev == "start":
+                # hier later: OpenAI Realtime sessie starten
+                pass
+            elif ev == "media":
+                # hier later: msg["media"]["payload"] (base64 PCMU) naar OpenAI sturen
+                pass
+            elif ev == "stop":
+                break
+    except Exception:
+        # Twilio sluit soms abrupt; stil afronden
+        pass
+    finally:
+        await ws.close()
 
 # ===== Admin API (beschermd) =====
 @app.post("/admin/toggles", dependencies=[Depends(auth)], response_model=RuntimeOut)
@@ -240,11 +234,6 @@ ADMIN_UI_DIR = BASE_DIR / "admin_ui"
 
 @app.get("/admin/ui/{path:path}", dependencies=[Depends(auth)])
 def admin_ui_any(path: str):
-    """
-    Beschermt alle UI-bestanden met Basic Auth.
-    /admin/ui/   -> index.html
-    /admin/ui/live.html, /admin/ui/report.html, /admin/ui/live.js, /admin/ui/style.css
-    """
     target = ADMIN_UI_DIR / (path or "index.html")
     if target.is_dir():
         target = target / "index.html"
@@ -252,7 +241,7 @@ def admin_ui_any(path: str):
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(target)
 
-# ===== Logout (forceer nieuwe Basic Auth prompt) =====
+# ===== Logout =====
 @app.get("/admin/logout")
 def admin_logout():
     raise HTTPException(
@@ -261,7 +250,7 @@ def admin_logout():
         headers={"WWW-Authenticate": "Basic"},
     )
 
-# ===== Health & diagnostics =====
+# ===== Health =====
 @app.get("/healthz")
 def healthz():
     ok = True
