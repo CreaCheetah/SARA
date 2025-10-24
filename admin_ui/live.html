@@ -9,7 +9,7 @@
   *{box-sizing:border-box}
   body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);
     background:radial-gradient(1200px 600px at 10% 10%,var(--bg1),var(--bg2))}
-  .wrap{max-width:900px;margin:20px auto;padding:0 16px}
+  .wrap{max-width:900px;margin:20px auto;padding:0 20px} /* mobiel padding iets groter */
   header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px}
   .brand{display:flex;align-items:center;gap:10px}
   .flag{width:22px;height:22px;border-radius:6px;background:linear-gradient(90deg,#1e9b3f 33%,#fff 33% 66%,#d21f2b 0)}
@@ -122,55 +122,7 @@
     </div>
   </div>
 
-<script>
-  const BASE = location.origin;
-  const $ = id => document.getElementById(id);
-  const setStrong = (el,val)=>{el.textContent=String(val);el.className=(val===true||val==="open")?"ok":((val===false||val==="closed")?"no":"");};
-
-  async function getStatus(){
-    const r = await fetch(`${BASE}/runtime/status`, {cache:"no-store"});
-    if(!r.ok) return;
-    const j = await r.json();
-    setStrong($("mode"), j.mode);
-    setStrong($("delivery"), j.delivery_enabled);
-    setStrong($("bot"), j.bot_enabled);
-    $("win").textContent = `${j.window.open} / ${j.window.delivery} / ${j.window.close}`;
-
-    $("bot_enabled").checked = !!j.bot_enabled;
-    $("pasta_available").checked = !!j.pasta_available;
-    $("delay_pasta_minutes").value = j.delay_pasta_minutes;
-    $("delay_schotels_minutes").value = j.delay_schotels_minutes;
-    $("delivery_enabled").checked = !!j.delivery_enabled;
-    // Modus laat standaard "auto" staan; gebruiker kan handmatig kiezen.
-  }
-
-  async function save(){
-    const body = {
-      bot_enabled: $("bot_enabled").checked,
-      kitchen_closed: false, // veld verwijderd, forceer veilig uit
-      pasta_available: $("pasta_available").checked,
-      delay_pasta_minutes: +$("delay_pasta_minutes").value,
-      delay_schotels_minutes: +$("delay_schotels_minutes").value,
-      is_open_override: (document.querySelector('input[name="mode"]:checked')||{}).value || "auto",
-      delivery_enabled: $("delivery_enabled").checked,
-      pickup_enabled: null,
-      ttl_minutes: null
-    };
-    const r = await fetch(`${BASE}/admin/toggles`, {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify(body)
-    });
-    $("saveStatus").textContent = r.ok ? "Opgeslagen." : `Fout: ${r.status}`;
-    if(r.ok) getStatus();
-  }
-
-  $("save").onclick = save;
-
-  let timer = setInterval(getStatus, 5000);
-  $("autopoll").onchange = e => { if(e.target.checked){ timer=setInterval(getStatus,5000) } else { clearInterval(timer) }};
-
-  getStatus();
-</script>
+  <!-- verwijzing naar extern script -->
+  <script src="/admin/ui/live.js"></script>
 </body>
 </html>
