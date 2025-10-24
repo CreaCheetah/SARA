@@ -1,24 +1,24 @@
-# Mada Belbot - Twilio Voice webhook + Dashboard API
-
+# Mada Belbot - Twilio Voice webhook + Dashboard API + OpenAI TTS
 import os
 import json
-import re
-import threading
+import hashlib
+import base64
 from datetime import datetime, time
 from pathlib import Path
 from typing import Optional, Literal
+from urllib.parse import quote
 
-from fastapi import FastAPI, Response, Depends, HTTPException
+import requests
+from fastapi import FastAPI, Response, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, ValidationError
 from zoneinfo import ZoneInfo
 from redis import Redis
 from redis.exceptions import RedisError
 
 # ===== Init =====
-app = FastAPI(title="Adams Belbot")
+app = FastAPI(title="Mada AI Assistent")
 security = HTTPBasic()
 
 # ===== Config & Auth =====
@@ -26,7 +26,11 @@ ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "CHANGE_ME")
 TZ = ZoneInfo(os.getenv("TZ", "Europe/Amsterdam"))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-CUSTOMERS_PATH = os.getenv("CUSTOMERS_FILE", "customers_clean.json")
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+TTS_MODEL = os.getenv("TTS_MODEL", "gpt-4o-mini-tts")
+TTS_VOICE = os.getenv("TTS_VOICE", "aria")  # vriendelijke NL stem
+TTS_FORMAT = "mp3"
 
 def auth(creds: HTTPBasicCredentials = Depends(security)) -> bool:
     if creds.username != ADMIN_USER or creds.password != ADMIN_PASS:
@@ -55,7 +59,7 @@ class TogglesIn(BaseModel):
     is_open_override: Literal["auto", "open", "closed"] = "auto"
     delivery_enabled: Optional[bool] = None
     pickup_enabled: Optional[bool] = None
-    ttl_minutes: int = Field(default=180, ge=1, le=720)
+    ttl_minutes: int = Field(default=180, ge=1, le=720)  # max 12 uur
 
 class RuntimeOut(BaseModel):
     now: str
@@ -150,111 +154,104 @@ def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
         window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"},
     )
 
-# ===== Twilio greeting =====
+# ===== Teksten / begroeting =====
 NAME = "Ristorante Adam Spanbroek"
-REC = "Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren."
-G_DAY = f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}. {REC}"
-G_EVE = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. {REC}"
 
 def select_greeting(now: Optional[datetime] = None) -> str:
     now = now.astimezone(TZ) if now else datetime.now(TZ)
     t = now.time()
     st = evaluate_status(now)
-    if st.mode == "closed":
-        if t < time(18, 0):
-            return f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
-        else:
-            return f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
-    return G_DAY if t < time(18, 0) else G_EVE
 
-# ===== Routes: runtime & voice =====
+    if st.mode == "closed":
+        dagdeel = "Goedemiddag" if t < time(18, 0) else "Goedenavond"
+        return (
+            f"{dagdeel}, u spreekt met Mada, de digitale assistent van {NAME}. "
+            "We zijn op dit moment gesloten. Vanaf vier uur ’s middags zijn we weer bereikbaar."
+        )
+
+    dagdeel = "Goedemiddag" if t < time(18, 0) else "Goedenavond"
+    return f"{dagdeel}, u spreekt met Mada, de digitale assistent van {NAME}. Waarmee kan ik u helpen?"
+
+# ===== Runtime status =====
 @app.get("/runtime/status", response_model=RuntimeOut)
 def runtime_status():
     return evaluate_status()
 
+# ===== OpenAI TTS helper =====
+def _tts_cache_key(text: str) -> str:
+    h = hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return f"tts:{TTS_MODEL}:{TTS_VOICE}:{h}"
+
+def synthesize_tts_mp3(text: str) -> bytes:
+    """Synthesize speech via OpenAI TTS and return MP3 bytes. Uses Redis cache."""
+    if not OPENAI_API_KEY:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY missing")
+
+    key = _tts_cache_key(text)
+    cached_b64 = r.get(key)
+    if cached_b64:
+        try:
+            return base64.b64decode(cached_b64)
+        except Exception:
+            pass  # jat het opnieuw
+
+    url = "https://api.openai.com/v1/audio/speech"
+    payload = {
+        "model": TTS_MODEL,
+        "voice": TTS_VOICE,
+        "input": text,
+        "format": TTS_FORMAT,
+        # NL uitspraak hint:
+        "language": "nl-NL"
+    }
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    resp = requests.post(url, headers=headers, json=payload, timeout=60)
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"TTS error {resp.status_code}: {resp.text[:200]}")
+    audio_bytes = resp.content
+    # cache ~ 12 uur
+    try:
+        r.setex(key, 12 * 3600, base64.b64encode(audio_bytes).decode("ascii"))
+    except RedisError:
+        pass
+    return audio_bytes
+
+@app.get("/tts")
+def tts_endpoint(text: str):
+    """Return MP3 for given text. Used by Twilio <Play>."""
+    audio = synthesize_tts_mp3(text)
+    return Response(content=audio, media_type="audio/mpeg")
+
+# ===== Twilio Voice webhook =====
 @app.api_route("/voice/incoming", methods=["GET", "POST"])
-def voice_incoming():
+def voice_incoming(request: Request):
     text = select_greeting()
-    hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME", "mada-3ijw.onrender.com")
+    # Twilio speelt MP3 af vanaf onze /tts endpoint
+    host = os.getenv("RENDER_EXTERNAL_HOSTNAME", request.headers.get("host", "localhost"))
+    base_url = f"https://{host}"
+    tts_url = f"{base_url}/tts?text={quote(text)}"
+
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say language="nl-NL">{text}</Say>
-  <Connect>
-    <Stream url="wss://{hostname}/twilio/stream"/>
-  </Connect>
+  <Play>{tts_url}</Play>
+  <!-- Stilte zodat de lijn open blijft voor het vervolg in de huidige fase -->
+  <Pause length="2"/>
+  <Say language="nl-NL">Een ogenblik alstublieft.</Say>
 </Response>"""
-    return Response(content=twiml, media_type="text/xml")
+    return Response(content=twiml.strip(), media_type="text/xml")
 
-# ===== Twilio Media Stream WebSocket =====
+# (WebSocket placeholder; wordt niet gebruikt in deze TTS-only fase)
 @app.websocket("/twilio/stream")
 async def twilio_stream(ws: WebSocket):
     await ws.accept()
     try:
         while True:
-            _ = await ws.receive_text()
+            await ws.receive_text()
     except WebSocketDisconnect:
         pass
-
-# ===== Customers lookup (protected) =====
-_customers_lock = threading.Lock()
-_customers_idx = {}
-_customers_mtime = None
-_phone_rx = re.compile(r"\D+")
-
-def _norm_phone(v: str) -> str:
-    if not v:
-        return ""
-    digits = _phone_rx.sub("", v)
-    if digits.startswith("31") and len(digits) >= 11:
-        digits = "0" + digits[2:]
-    return digits
-
-def _load_customers(force: bool = False):
-    global _customers_idx, _customers_mtime
-    p = Path(CUSTOMERS_PATH)
-    if not p.exists():
-        return
-    stat = p.stat()
-    if not force and _customers_mtime == stat.st_mtime:
-        return
-    with _customers_lock:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        idx = {}
-        for row in data:
-            phones = filter(None, [
-                _norm_phone(row.get("telefoon", "")),
-                _norm_phone(row.get("telefoon2", "")),
-            ])
-            for tel in set([t for t in phones if t]):
-                idx[tel] = {
-                    "naam": row.get("naam", ""),
-                    "telefoon": row.get("telefoon", ""),
-                    "telefoon2": row.get("telefoon2", ""),
-                    "straat": row.get("straat", ""),
-                    "huisnr": row.get("huisnr", ""),
-                    "postcode": row.get("postcode", ""),
-                }
-        _customers_idx = idx
-        _customers_mtime = stat.st_mtime
-
-try:
-    _load_customers(force=True)
-except Exception:
-    pass
-
-@app.get("/admin/customers/lookup", dependencies=[Depends(auth)])
-def customers_lookup(phone: str):
-    _load_customers()
-    tel = _norm_phone(phone)
-    rec = _customers_idx.get(tel)
-    if not rec and len(tel) >= 8:
-        rec = _customers_idx.get(tel[-8:])
-    return JSONResponse({"found": bool(rec), "match_key": tel, "record": rec})
-
-@app.post("/admin/customers/reload", dependencies=[Depends(auth)])
-def customers_reload():
-    _load_customers(force=True)
-    return {"ok": True, "count": len(_customers_idx)}
 
 # ===== Admin API (beschermd) =====
 @app.post("/admin/toggles", dependencies=[Depends(auth)], response_model=RuntimeOut)
@@ -278,7 +275,7 @@ def admin_ui_any(path: str):
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(target)
 
-# ===== Logout (forceer nieuwe Basic Auth prompt) =====
+# ===== Logout =====
 @app.get("/admin/logout")
 def admin_logout():
     raise HTTPException(
@@ -287,7 +284,7 @@ def admin_logout():
         headers={"WWW-Authenticate": "Basic"},
     )
 
-# ===== Health & diagnostics =====
+# ===== Health =====
 @app.get("/healthz")
 def healthz():
     ok = True
