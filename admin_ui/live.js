@@ -11,6 +11,8 @@ const roundAllowed = v => {
 
 const setPill = (el, ok) => { el.textContent = ok ? "aan" : "uit"; el.className = ok ? "ok" : "no"; };
 const theme = mode => document.body.classList.toggle('mode-closed', mode === 'closed');
+const setChip = (el, label, ok) => { el.textContent = `${label}: ${ok ? "aan" : "uit"}`; el.className = `chip ${ok ? "ok" : "no"}`; };
+const setOpenChip = (mode) => { const ok = (mode === "open"); $("chip_open").textContent = `Restaurant: ${ok?"open":"dicht"}`; $("chip_open").className = `chip ${ok?"ok":"no"}`; };
 
 function syncRadiosFromMode(mode){
   const v = (mode === 'open') ? 'open' : (mode === 'closed' ? 'closed' : 'auto');
@@ -23,17 +25,52 @@ function setDeliveryDisabled(disabled){
   $("sw_delivery").classList.toggle('disabled', disabled);
 }
 
+function makePresets(nodeId, inputId, badgeId){
+  const host = $(nodeId);
+  host.innerHTML = "";
+  ALLOWED.forEach(v=>{
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip-btn";
+    b.textContent = v;
+    b.onclick = () => {
+      $(inputId).value = v;
+      $(badgeId).textContent = v;
+      [...host.children].forEach(x=>x.classList.remove("active"));
+      b.classList.add("active");
+    };
+    host.appendChild(b);
+  });
+}
+
+function updateLatency(ms){
+  const dot = $("latency");
+  dot.classList.remove("ok","slow","bad");
+  if (ms < 300) dot.classList.add("ok");
+  else if (ms < 800) dot.classList.add("slow");
+  else dot.classList.add("bad");
+}
+
+async function api(path, opts){
+  const t0 = performance.now();
+  const r = await fetch(`${BASE}${path}`, opts);
+  updateLatency(performance.now() - t0);
+  return r;
+}
+
 async function getStatus(){
-  const r = await fetch(`${BASE}/runtime/status`, {cache:"no-store"});
+  const r = await api(`/runtime/status`, {cache:"no-store"});
   if(!r.ok) return;
   const j = await r.json();
 
-  // status
+  // chips + status
   const isOpen = (j.mode === 'open');
   setPill($("st_open"), isOpen);
-  setPill($("st_delivery"), !!j.delivery_enabled);
   setPill($("st_bot"), !!j.bot_enabled);
+  setChip($("chip_mada"), "Mada", !!j.bot_enabled);
+  setOpenChip(j.mode);
   $("win").textContent = `Tijdvenster ${j.window.open} • ${j.window.delivery} • ${j.window.close}`;
+  $("svctime").textContent = `Systeemtijd: ${new Date(j.now).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}`;
 
   // thema + radios
   theme(j.mode);
@@ -54,11 +91,15 @@ async function getStatus(){
 
 function hookSliders(){
   $("delay_pasta_minutes").addEventListener('input', e=>{
-    $("badge_pasta").textContent = roundAllowed(+e.target.value);
+    const v = roundAllowed(+e.target.value);
+    $("badge_pasta").textContent = v;
   });
   $("delay_schotels_minutes").addEventListener('input', e=>{
-    $("badge_schotels").textContent = roundAllowed(+e.target.value);
+    const v = roundAllowed(+e.target.value);
+    $("badge_schotels").textContent = v;
   });
+  makePresets("pre_pasta","delay_pasta_minutes","badge_pasta");
+  makePresets("pre_schotels","delay_schotels_minutes","badge_schotels");
 }
 
 async function save(){
@@ -75,27 +116,45 @@ async function save(){
   const btn = $("save");
   const old = btn.textContent;
   try{
-    const r = await fetch(`${BASE}/admin/toggles`, {
-      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)
-    });
+    const r = await api(`/admin/toggles`, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
     if(r.ok){
-      btn.textContent = "Opgeslagen ✓"; btn.classList.remove('err'); btn.classList.add('ok');
-      setTimeout(()=>{ btn.textContent = old; btn.classList.remove('ok'); }, 1500);
+      btn.textContent = "Opgeslagen ✓";
+      $("savedNote").textContent = `laatst opgeslagen ${new Date().toLocaleTimeString()}`;
+      setTimeout(()=>{ btn.textContent = old; }, 1500);
       getStatus();
     }else{
-      btn.textContent = `Fout ${r.status}`; btn.classList.remove('ok'); btn.classList.add('err');
-      setTimeout(()=>{ btn.textContent = old; btn.classList.remove('err'); }, 2000);
+      btn.textContent = `Fout ${r.status}`; setTimeout(()=>{ btn.textContent = old; }, 2000);
     }
   }catch(_){
-    btn.textContent = "Netwerkfout"; btn.classList.remove('ok'); btn.classList.add('err');
-    setTimeout(()=>{ btn.textContent = old; btn.classList.remove('err'); }, 2000);
+    btn.textContent = "Netwerkfout"; setTimeout(()=>{ btn.textContent = old; }, 2000);
   }
 }
 
+function resetDefaults(){
+  // Auto, delivery volgens venster, vertraging 0
+  document.querySelector('input[name="mode"][value="auto"]').checked = true;
+  $("delivery_enabled").checked = false;
+  $("delay_pasta_minutes").value = 0; $("badge_pasta").textContent = 0;
+  $("delay_schotels_minutes").value = 0; $("badge_schotels").textContent = 0;
+  $("bot_enabled").checked = true;
+  $("pasta_available").checked = true;
+  save();
+}
+
 $("save").onclick = save;
+$("reset").onclick = resetDefaults;
 
 let timer = setInterval(getStatus, 5000);
 $("autopoll").onchange = e => { if(e.target.checked){ timer=setInterval(getStatus,5000) } else { clearInterval(timer) } };
+
+// Pauzeer polling als tab verborgen is
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden){ clearInterval(timer); }
+  else if($("autopoll").checked){ timer = setInterval(getStatus, 5000); getStatus(); }
+});
+
+// Enter → opslaan
+document.addEventListener("keydown", (e)=>{ if(e.key==="Enter") save(); });
 
 hookSliders();
 getStatus();
