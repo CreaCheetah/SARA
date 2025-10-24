@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "version": "1.0",
+    "description": "Definitie van live-instellingen en hun effect in runtime en voice"
+  },
+  "is_open_override": {
+    "type": "enum",
+    "values": ["auto", "open", "closed"],
+    "affects": ["runtime.mode", "voice.greeting"]
+  },
+  "bot_enabled": {
+    "type": "boolean",
+    "affects": ["runtime.bot", "voice.redirect"]
+  },
+  "delivery_enabled": {
+    "type": "boolean",
+    "affects": ["runtime.delivery", "voice.delivery_notice"]
+  },
+  "pasta_available": {
+    "type": "boolean",
+    "affects": ["runtime.menu", "voice.menu_notice"]
+  },
+  "delay_pasta_minutes": {
+    "type": "integer",
+    "values": [0, 10, 20, 30, 45, 60],
+    "affects": ["runtime.delay_pasta", "voice.delay_notice"]
+  },
+  "delay_schotels_minutes": {
+    "type": "integer",
+    "values": [0, 10, 20, 30, 45, 60],
+    "affects": ["runtime.delay_schotels", "voice.delay_notice"]
+  }
+}
