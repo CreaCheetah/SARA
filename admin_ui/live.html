@@ -1,99 +1,176 @@
 <!doctype html>
 <html lang="nl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Belservice • Live instellingen</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Belservice • Live instellingen</title>
+<style>
+  :root{--bg1:#e9f2eb;--bg2:#efe8e6;--card:#fff;--ink:#0f1720;--muted:#6b7280;--line:#e5e7eb;--green:#138a43;--red:#c52e34}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);
+    background:radial-gradient(1200px 600px at 10% 10%,var(--bg1),var(--bg2))}
+  .wrap{max-width:900px;margin:20px auto;padding:0 16px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .flag{width:22px;height:22px;border-radius:6px;background:linear-gradient(90deg,#1e9b3f 33%,#fff 33% 66%,#d21f2b 0)}
+  h1{margin:0;font-size:22px}
+  .back{appearance:none;border:1px solid var(--line);background:#fff;border-radius:12px;padding:8px 12px;cursor:pointer}
+  .grid{display:grid;gap:18px;grid-template-columns:1fr}
+  @media(min-width:900px){.grid{grid-template-columns:1fr 1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 24px rgba(0,0,0,.08);padding:18px}
+  .card h2{margin:0 0 8px}
+  .sub{color:var(--muted);margin:0 0 12px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;margin:10px 0}
+  .row label{font-weight:600}
+  .switch{width:46px;height:28px;border-radius:999px;background:#e5e7eb;position:relative;cursor:pointer;flex:0 0 auto}
+  .switch input{display:none}
+  .knob{position:absolute;top:3px;left:3px;width:22px;height:22px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:all .2s}
+  .switch input:checked + .knob{left:21px;background:#fff}
+  .switch input:checked ~ .bg{background:var(--green)}
+  .bg{position:absolute;inset:0;border-radius:999px;transition:background .2s}
+  .select{display:flex;gap:8px;align-items:center}
+  select{padding:8px 10px;border:1px solid var(--line);border-radius:10px}
+  .modes{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .mode{padding:12px;border:1px solid var(--line);border-radius:14px;text-align:center;cursor:pointer}
+  .mode input{margin-right:6px}
+  .ok{color:var(--green);font-weight:700}
+  .no{color:var(--red);font-weight:700}
+  .actions{display:flex;align-items:center;gap:12px;margin-top:12px}
+  .btn{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;color:#fff;background:var(--green)}
+  .muted{color:var(--muted)}
+</style>
 </head>
 <body>
-  <header class="sub">
-    <a class="back" href="index.html">Terug</a>
-    <h1>Belservice • Live instellingen</h1>
-    <div class="flag">🇮🇹</div>
-  </header>
-
-  <section class="card auth">
-    <label>Gebruikersnaam <input id="user" value="admin"></label>
-    <label>Wachtwoord <input id="pass" type="password" placeholder="••••••••"></label>
-    <button id="login" class="btn">Inloggen</button>
-    <span id="authStatus"></span>
-  </section>
-
-  <section class="card">
-    <h2>Status</h2>
-    <div class="grid status">
-      <div>Open/dicht: <strong id="mode">-</strong></div>
-      <div>Bezorging: <strong id="delivery">-</strong></div>
-      <div>Afhalen: <strong id="pickup">-</strong></div>
-      <div>Bot actief: <strong id="bot">-</strong></div>
-      <div>Keuken: <strong id="kitchen">-</strong></div>
-      <div>Tijdvenster: <span id="win">-</span></div>
-      <div>Update: <span id="now">-</span></div>
-    </div>
-    <button id="refresh" class="btn">Vernieuwen</button>
-  </section>
-
-  <section class="card">
-    <h2>Instellingen</h2>
-    <div class="grid form">
-      <label class="switch"><input type="checkbox" id="bot_enabled"> Belbot actief</label>
-      <label class="switch"><input type="checkbox" id="kitchen_closed"> Keuken gesloten</label>
-      <label class="switch"><input type="checkbox" id="pasta_available" checked> Pasta’s beschikbaar</label>
-
-      <label>Vertraging pasta
-        <select id="delay_pasta_minutes">
-          <option>0</option><option>10</option><option>20</option>
-          <option>30</option><option>45</option><option>60</option>
-        </select>
-      </label>
-
-      <label>Vertraging schotels
-        <select id="delay_schotels_minutes">
-          <option>0</option><option>10</option><option>20</option>
-          <option>30</option><option>45</option><option>60</option>
-        </select>
-      </label>
-
-      <fieldset class="mode">
-        <legend>Modus</legend>
-        <label><input type="radio" name="mode" value="auto" checked> Auto</label>
-        <label><input type="radio" name="mode" value="open"> Open</label>
-        <label><input type="radio" name="mode" value="closed"> Gesloten</label>
-      </fieldset>
-
-      <div class="col">
-        <label class="switch"><input type="checkbox" id="delivery_enabled_null"> Bezorging handmatig</label>
-        <label class="switch"><input type="checkbox" id="delivery_enabled"> Bezorging aan</label>
+  <div class="wrap">
+    <header>
+      <button class="back" onclick="location.href='/admin/ui/index.html'">Terug</button>
+      <div class="brand">
+        <div class="flag"></div>
+        <h1>Belservice • Live instellingen</h1>
       </div>
-      <div class="col">
-        <label class="switch"><input type="checkbox" id="pickup_enabled_null"> Afhalen handmatig</label>
-        <label class="switch"><input type="checkbox" id="pickup_enabled"> Afhalen aan</label>
-      </div>
-    </div>
+      <span></span>
+    </header>
 
-    <div class="actions">
-      <button id="save" class="btn btn-green">Opslaan</button>
-      <label class="switch small"><input type="checkbox" id="autopoll" checked> Auto-ververs elke 5 s</label>
-    </div>
+    <div class="grid">
+      <!-- Status -->
+      <section class="card">
+        <h2>Status</h2>
+        <p class="sub">Actuele toestand volgens runtime.</p>
+        <div class="row"><label>Open/dicht:</label><strong id="mode" class="">…</strong></div>
+        <div class="row"><label>Bezorging:</label><strong id="delivery" class="">…</strong></div>
+        <div class="row"><label>Bot actief:</label><strong id="bot" class="">…</strong></div>
+        <div class="row"><label>Tijdvenster:</label><span id="win" class="muted">…</span></div>
+      </section>
 
-    <div id="saveStatus" class="note"></div>
-  </section>
+      <!-- Instellingen -->
+      <section class="card">
+        <h2>Instellingen</h2>
+
+        <div class="row">
+          <label for="bot_enabled">Belbot actief</label>
+          <label class="switch">
+            <input id="bot_enabled" type="checkbox" />
+            <span class="bg"></span><span class="knob"></span>
+          </label>
+        </div>
+
+        <div class="row">
+          <label for="pasta_available">Pasta’s beschikbaar</label>
+          <label class="switch">
+            <input id="pasta_available" type="checkbox" />
+            <span class="bg"></span><span class="knob"></span>
+          </label>
+        </div>
+
+        <div class="row select">
+          <label for="delay_pasta_minutes">Vertraging pasta</label>
+          <select id="delay_pasta_minutes">
+            <option>0</option><option>10</option><option>20</option><option>30</option><option>45</option><option>60</option>
+          </select>
+        </div>
+
+        <div class="row select">
+          <label for="delay_schotels_minutes">Vertraging schotels</label>
+          <select id="delay_schotels_minutes">
+            <option>0</option><option>10</option><option>20</option><option>30</option><option>45</option><option>60</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label>Modus</label>
+          <div class="modes">
+            <label class="mode"><input type="radio" name="mode" value="auto" checked>Auto</label>
+            <label class="mode"><input type="radio" name="mode" value="open">Open</label>
+            <label class="mode"><input type="radio" name="mode" value="closed">Gesloten</label>
+          </div>
+        </div>
+
+        <div class="row">
+          <label for="delivery_enabled">Bezorging actief</label>
+          <label class="switch">
+            <input id="delivery_enabled" type="checkbox" checked />
+            <span class="bg"></span><span class="knob"></span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="save">Opslaan</button>
+          <label><input type="checkbox" id="autopoll" checked> <span class="muted">Auto-ververs elke 5 s</span></label>
+          <span id="saveStatus" class="muted"></span>
+        </div>
+      </section>
+    </div>
+  </div>
+
 <script>
-// gebruik het opgeslagen login-token van index.html
-const __auth = sessionStorage.getItem('auth');
-if (__auth) {
-  const origFetch = window.fetch;
-  window.fetch = (url, opts={}) => {
-    opts.headers = Object.assign({'Authorization': __auth}, opts.headers||{});
-    return origFetch(url, opts);
-  };
-  document.getElementById('authStatus')?.append(' (sessie actief)');
-}
+  const BASE = location.origin;
+  const $ = id => document.getElementById(id);
+  const setStrong = (el,val)=>{el.textContent=String(val);el.className=(val===true||val==="open")?"ok":((val===false||val==="closed")?"no":"");};
+
+  async function getStatus(){
+    const r = await fetch(`${BASE}/runtime/status`, {cache:"no-store"});
+    if(!r.ok) return;
+    const j = await r.json();
+    setStrong($("mode"), j.mode);
+    setStrong($("delivery"), j.delivery_enabled);
+    setStrong($("bot"), j.bot_enabled);
+    $("win").textContent = `${j.window.open} / ${j.window.delivery} / ${j.window.close}`;
+
+    $("bot_enabled").checked = !!j.bot_enabled;
+    $("pasta_available").checked = !!j.pasta_available;
+    $("delay_pasta_minutes").value = j.delay_pasta_minutes;
+    $("delay_schotels_minutes").value = j.delay_schotels_minutes;
+    $("delivery_enabled").checked = !!j.delivery_enabled;
+    // Modus laat standaard "auto" staan; gebruiker kan handmatig kiezen.
+  }
+
+  async function save(){
+    const body = {
+      bot_enabled: $("bot_enabled").checked,
+      kitchen_closed: false, // veld verwijderd, forceer veilig uit
+      pasta_available: $("pasta_available").checked,
+      delay_pasta_minutes: +$("delay_pasta_minutes").value,
+      delay_schotels_minutes: +$("delay_schotels_minutes").value,
+      is_open_override: (document.querySelector('input[name="mode"]:checked')||{}).value || "auto",
+      delivery_enabled: $("delivery_enabled").checked,
+      pickup_enabled: null,
+      ttl_minutes: null
+    };
+    const r = await fetch(`${BASE}/admin/toggles`, {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    $("saveStatus").textContent = r.ok ? "Opgeslagen." : `Fout: ${r.status}`;
+    if(r.ok) getStatus();
+  }
+
+  $("save").onclick = save;
+
+  let timer = setInterval(getStatus, 5000);
+  $("autopoll").onchange = e => { if(e.target.checked){ timer=setInterval(getStatus,5000) } else { clearInterval(timer) }};
+
+  getStatus();
 </script>
-
-
-
-  <script src="live.js"></script>
 </body>
 </html>
