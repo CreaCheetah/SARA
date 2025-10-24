@@ -1,17 +1,38 @@
 <!doctype html>
 <html lang="nl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Belservice • Rapportage</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    :root{--bg1:#e9f2eb;--bg2:#efe8e6;--card:#fff;--ink:#0f1720;--muted:#6b7280;--line:#e5e7eb}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink);
+      background:radial-gradient(1200px 600px at 10% 10%,var(--bg1),var(--bg2))}
+    .wrap{max-width:900px;margin:20px auto;padding:0 20px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 16px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .flag{width:22px;height:22px;border-radius:6px;background:linear-gradient(90deg,#1e9b3f 33%,#fff 33% 66%,#d21f2b 0)}
+    h1{margin:0;font-size:22px}
+    .back{appearance:none;border:1px solid var(--line);background:#fff;border-radius:12px;padding:8px 12px;cursor:pointer;text-decoration:none;color:inherit}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 24px rgba(0,0,0,.08);padding:18px}
+    .muted{color:var(--muted)}
+  </style>
 </head>
 <body>
-  <header class="sub">
-    <a class="back" href="index.html">Terug</a>
-    <h1>Belservice • Rapportage</h1>
-    <div class="flag">🇮🇹</div>
-  </header>
-  <section class="card"><p>Rapportage wordt later gekoppeld.</p></section>
+  <div class="wrap">
+    <header>
+      <a class="back" href="index.html">Terug</a>
+      <div class="brand">
+        <div class="flag"></div>
+        <h1>Belservice • Rapportage</h1>
+      </div>
+      <span></span>
+    </header>
+
+    <section class="card">
+      <p class="muted">Rapportage wordt later gekoppeld.</p>
+    </section>
+  </div>
 </body>
 </html>
