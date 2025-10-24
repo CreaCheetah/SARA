@@ -208,6 +208,15 @@ def admin_ui_any(path: str):
         raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(target)
 
+# ===== Logout (forceer nieuwe Basic Auth prompt) =====
+@app.get("/admin/logout")
+def admin_logout():
+    raise HTTPException(
+        status_code=401,
+        detail="Logged out",
+        headers={"WWW-Authenticate": "Basic"},
+    )
+
 # ===== Health & diagnostics =====
 @app.get("/healthz")
 def healthz():
