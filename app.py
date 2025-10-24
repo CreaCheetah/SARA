@@ -3,27 +3,35 @@
 import os
 import json
 from datetime import datetime, time
-from fastapi import FastAPI, Response, Depends, HTTPException
+from pathlib import Path
+from typing import Optional, Literal
+
+from fastapi import FastAPI, Response, Depends, HTTPException, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel, Field, ValidationError
 from zoneinfo import ZoneInfo
 from redis import Redis
-from pathlib import Path
+from redis.exceptions import RedisError
 
 # ===== Init =====
 app = FastAPI(title="Adams Belbot")
 security = HTTPBasic()
 
 # ===== Config & Auth =====
-ADMIN_USER = os.getenv("ADMIN_USER", "admin")
-ADMIN_PASS = os.getenv("ADMIN_PASS", "mada12")
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")         # zet in Render
+ADMIN_PASS = os.getenv("ADMIN_PASS", "CHANGE_ME")     # zet in Render
 TZ = ZoneInfo(os.getenv("TZ", "Europe/Amsterdam"))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-def auth(creds: HTTPBasicCredentials = Depends(security)):
+def auth(creds: HTTPBasicCredentials = Depends(security)) -> bool:
+    # Browser moet Basic Auth prompt tonen -> WWW-Authenticate header vereist
     if creds.username != ADMIN_USER or creds.password != ADMIN_PASS:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
     return True
 
 # ===== Redis =====
@@ -33,8 +41,6 @@ KEY_OVERRIDES = "belbot:overrides"
 # ===== Openingstijden =====
 OPEN_START, OPEN_END = time(16, 0), time(22, 0)
 DELIVERY_START, DELIVERY_END = time(17, 0), time(21, 30)
-CALLER_ID = "0226354645"
-FALLBACK_PHONE = "0226427541"
 
 # ===== Modellen =====
 class TogglesIn(BaseModel):
@@ -43,17 +49,17 @@ class TogglesIn(BaseModel):
     pasta_available: bool = True
     delay_pasta_minutes: int = Field(default=0, ge=0)
     delay_schotels_minutes: int = Field(default=0, ge=0)
-    is_open_override: str | None = "auto"
-    delivery_enabled: bool | None = None
-    pickup_enabled: bool | None = None
-    ttl_minutes: int | None = 180
+    is_open_override: Literal["auto", "open", "closed"] = "auto"
+    delivery_enabled: Optional[bool] = None
+    pickup_enabled: Optional[bool] = None
+    ttl_minutes: int = Field(default=180, ge=1, le=720)  # max 12 uur
 
 class RuntimeOut(BaseModel):
     now: str
-    mode: str
+    mode: Literal["open", "closed"]
     delivery_enabled: bool
     pickup_enabled: bool
-    close_reason: str | None = None
+    close_reason: Optional[str] = None
     kitchen_closed: bool = False
     bot_enabled: bool = True
     pasta_available: bool
@@ -69,17 +75,23 @@ def _auto(now: datetime):
     pickup_auto = OPEN_START <= t < OPEN_END
     return open_now, delivery_auto, pickup_auto
 
-def _load_overrides() -> TogglesIn | None:
-    raw = r.get(KEY_OVERRIDES)
-    if not raw:
-        return None
-    return TogglesIn(**json.loads(raw))
+def _load_overrides() -> Optional[TogglesIn]:
+    try:
+        raw = r.get(KEY_OVERRIDES)
+        if not raw:
+            return None
+        return TogglesIn(**json.loads(raw))
+    except (RedisError, json.JSONDecodeError, ValidationError):
+        return None  # val veilig terug op defaults
 
 def _save_overrides(body: TogglesIn):
-    ttl = (body.ttl_minutes or 180) * 60
-    r.set(KEY_OVERRIDES, body.model_dump_json(), ex=ttl)
+    ttl = int(body.ttl_minutes) * 60
+    try:
+        r.set(KEY_OVERRIDES, body.model_dump_json(), ex=ttl)
+    except RedisError:
+        raise HTTPException(status_code=503, detail="Cache unavailable")
 
-def evaluate_status(now: datetime | None = None) -> RuntimeOut:
+def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
     now = now.astimezone(TZ) if now else datetime.now(TZ)
     over = _load_overrides()
     open_auto, delivery_auto, pickup_auto = _auto(now)
@@ -98,11 +110,11 @@ def evaluate_status(now: datetime | None = None) -> RuntimeOut:
             now=now.isoformat(), mode="closed",
             delivery_enabled=False, pickup_enabled=False,
             close_reason=None, kitchen_closed=True,
-            bot_enabled=over.bot_enabled,
-            pasta_available=over.pasta_available,
-            delay_pasta_minutes=over.delay_pasta_minutes,
-            delay_schotels_minutes=over.delay_schotels_minutes,
-            window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"}
+            bot_enabled=(over.bot_enabled if over else True),
+            pasta_available=(over.pasta_available if over else True),
+            delay_pasta_minutes=(over.delay_pasta_minutes if over else 0),
+            delay_schotels_minutes=(over.delay_schotels_minutes if over else 0),
+            window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"},
         )
 
     # buiten openingstijden
@@ -116,7 +128,7 @@ def evaluate_status(now: datetime | None = None) -> RuntimeOut:
             pasta_available=(over.pasta_available if over else True),
             delay_pasta_minutes=(over.delay_pasta_minutes if over else 0),
             delay_schotels_minutes=(over.delay_schotels_minutes if over else 0),
-            window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"}
+            window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"},
         )
 
     delivery = delivery_auto
@@ -135,21 +147,19 @@ def evaluate_status(now: datetime | None = None) -> RuntimeOut:
         pasta_available=(over.pasta_available if over else True),
         delay_pasta_minutes=(over.delay_pasta_minutes if over else 0),
         delay_schotels_minutes=(over.delay_schotels_minutes if over else 0),
-        window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"}
+        window={"open": "16:00", "delivery": "17:00-21:30", "close": "22:00"},
     )
 
 # ===== Twilio greeting =====
-NAME = "Ristorante Adams Spanbroek"
+NAME = "Ristorante Adam Spanbroek"
 REC = "Dit gesprek kan tijdelijk worden opgenomen om onze service te verbeteren."
 G_DAY = f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}. {REC}"
 G_EVE = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. {REC}"
-G_CLOSED = f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
 
-def select_greeting(now: datetime | None = None) -> str:
+def select_greeting(now: Optional[datetime] = None) -> str:
     now = now.astimezone(TZ) if now else datetime.now(TZ)
     t = now.time()
     st = evaluate_status(now)
-
     if st.mode == "closed":
         if t < time(18, 0):
             return f"Goedemiddag, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
@@ -157,14 +167,13 @@ def select_greeting(now: datetime | None = None) -> str:
             return f"Goedenavond, u spreekt met Mada, de digitale assistent van {NAME}. We zijn op dit moment gesloten. Onze openingstijden zijn van vier uur ’s middags tot tien uur ’s avonds."
     return G_DAY if t < time(18, 0) else G_EVE
 
-# ===== Routes =====
+# ===== Routes: runtime & voice =====
 @app.get("/runtime/status", response_model=RuntimeOut)
 def runtime_status():
     return evaluate_status()
 
 @app.api_route("/voice/incoming", methods=["GET", "POST"])
 def voice_incoming():
-    st = evaluate_status()
     text = select_greeting()
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -172,6 +181,7 @@ def voice_incoming():
 </Response>"""
     return Response(content=twiml, media_type="text/xml")
 
+# ===== Admin API (beschermd) =====
 @app.post("/admin/toggles", dependencies=[Depends(auth)], response_model=RuntimeOut)
 def set_toggles(body: TogglesIn):
     valid = {0, 10, 20, 30, 45, 60}
@@ -180,6 +190,30 @@ def set_toggles(body: TogglesIn):
     _save_overrides(body)
     return evaluate_status()
 
-# ===== Static Admin UI =====
+# ===== Auth-protected Static Admin UI =====
 BASE_DIR = Path(__file__).resolve().parent
-app.mount("/admin/ui", StaticFiles(directory=BASE_DIR / "admin_ui", html=True), name="admin_ui")
+ADMIN_UI_DIR = BASE_DIR / "admin_ui"
+
+@app.get("/admin/ui/{path:path}", dependencies=[Depends(auth)])
+def admin_ui_any(path: str):
+    """
+    Beschermt alle UI-bestanden met Basic Auth.
+    /admin/ui/   -> index.html
+    /admin/ui/live.html, /admin/ui/report.html, /admin/ui/live.js, /admin/ui/style.css
+    """
+    target = ADMIN_UI_DIR / (path or "index.html")
+    if target.is_dir():
+        target = target / "index.html"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(target)
+
+# ===== Health & diagnostics =====
+@app.get("/healthz")
+def healthz():
+    ok = True
+    try:
+        r.ping()
+    except RedisError:
+        ok = False
+    return JSONResponse({"ok": ok, "redis": ok})
