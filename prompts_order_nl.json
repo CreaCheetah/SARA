@@ -1,0 +1,22 @@
+{
+  "greet_open_morning": "Goedemorgen, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+  "greet_open_afternoon": "Goedemiddag, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+  "greet_open_evening": "Goedenavond, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+  "greet_closed": "We zijn op dit moment gesloten. U kunt ons weer bereiken vanaf vier uur in de middag.",
+  "ask_flow_start": "Wilt u bezorgen of afhalen?",
+  "ask_phone": "Welk telefoonnummer kan ik gebruiken om uw adres te controleren?",
+  "confirm_phone": "Ik heb {tel}. Klopt dat?",
+  "confirm_lookup_found": "Ik heb {straat} {huisnr} in {postcode}. Klopt dat?",
+  "confirm_lookup_missing": "Ik heb nog geen adres. Wat is uw postcode?",
+  "ask_house_number": "En het huisnummer alstublieft?",
+  "ask_street_name": "Dank u. En de straatnaam?",
+  "ask_items": "Wat mag ik voor u noteren?",
+  "ask_more": "Wilt u nog iets toevoegen of is dit alles?",
+  "summary": "Samengevat: {items}. {fulfilment} om {tijd}. Totaal {bedrag}.",
+  "ask_payment_delivery": "Betaalt u contant of wilt u een iDEAL-link?",
+  "ask_payment_pickup": "Betaalt u bij afhalen met contant of pin, of wilt u een iDEAL-link?",
+  "confirm_payment": "Genoteerd: {betaling}.",
+  "closing": "Dank u wel. Uw bestelling staat in. Fijne dag.",
+  "fallback1": "Ik heb u niet goed verstaan. Kunt u het herhalen?",
+  "fallback2_transfer": "Nog één moment. Ik verbind u door met een collega."
+}
