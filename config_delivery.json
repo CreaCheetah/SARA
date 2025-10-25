@@ -1,0 +1,14 @@
+{
+  "zones": [
+    {"name":"Zone 1","fee":2,"min_order":10,"zips":["1715","1716","1718"]},
+    {"name":"Zone 2","fee":3,"min_order":15,"zips":["1713"]},
+    {"name":"Zone 3","fee":3,"min_order":20,"zips":["1641","1642","1643","1652","1657","1654","1655","1661","1662","1663","1687","1711","1719"]},
+    {"name":"Zone 4","fee":5,"min_order":50,"zips":["1689","1625","1647","1648","1633","1645"]},
+    {"name":"Zone 5","fee":5,"min_order":50,"zips":["1688"]}
+  ],
+  "sla": {
+    "pickup_minutes": 15,
+    "pickup_combo_minutes": 30,
+    "delivery_minutes": 60
+  }
+}
