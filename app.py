@@ -1,4 +1,4 @@
-import os, json, csv, uuid
+import os, json, csv, uuid, base64
 from datetime import datetime, time
 from typing import Optional, Literal, Dict, Any
 from urllib.parse import quote_plus
@@ -6,12 +6,13 @@ from pathlib import Path
 
 import httpx
 from fastapi import FastAPI, Response, HTTPException, Request, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 from zoneinfo import ZoneInfo
+from starlette.staticfiles import StaticFiles
 
 # ---------- App ----------
-app = FastAPI(title="Mada Belassistent")
+app = FastAPI(title="SARA Belassistent")
 
 # ---------- Config ----------
 TZ = ZoneInfo(os.getenv("TZ", "Europe/Amsterdam"))
@@ -19,20 +20,24 @@ _host = os.getenv("PUBLIC_BASE_URL", os.getenv("RENDER_EXTERNAL_HOSTNAME", "mada
 BASE_URL = _host if str(_host).startswith("http") else f"https://{_host}"
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-TTS_MODEL = os.getenv("ENFTTS_MODEL", "gpt-4o-mini-tts")
-TTS_VOICE = os.getenv("ENFTTS_VOICE", "marin")
+TTS_MODEL = os.getenv("TTS_MODEL", "gpt-4o-mini-tts")
+TTS_VOICE = os.getenv("TTS_VOICE", "marin")
 RECORD_CALLS = os.getenv("RECORD_CALLS", "false").lower() == "true"
+
+ADMIN_USER = os.getenv("ADMIN_USER", "admin")
+ADMIN_PASS = os.getenv("ADMIN_PASS", "admin")
 
 REPO_ROOT = Path(__file__).resolve().parent
 CONFIG_DELIVERY_PATH = Path(os.getenv("CONFIG_DELIVERY", REPO_ROOT / "config_delivery.json"))
 PROMPTS_PATH = Path(os.getenv("PROMPTS_PATH", REPO_ROOT / "prompts_order_nl.json"))
-CUSTOMER_CSV = os.getenv("CUSTOMER_CSV", "/mnt/data/klanten.csv")  # NIET in GitHub
+CUSTOMER_CSV = os.getenv("CUSTOMER_CSV", "/mnt/data/klanten.csv")
+ADMIN_UI_DIR = Path(os.getenv("ADMIN_UI_DIR", REPO_ROOT / "admin_ui"))
 
 # ---------- Openingstijden ----------
 OPEN_START, OPEN_END = time(16, 0), time(22, 0)
 DEL_START,  DEL_END  = time(17, 0), time(21, 30)
 
-# ---------- Helpers: load config/prompts ----------
+# ---------- Helpers ----------
 def _load_json(path: Path, fallback: Dict[str, Any]) -> Dict[str, Any]:
     try:
         with open(path, encoding="utf-8") as f:
@@ -43,9 +48,9 @@ def _load_json(path: Path, fallback: Dict[str, Any]) -> Dict[str, Any]:
 PROMPTS = _load_json(
     PROMPTS_PATH,
     {
-        "greet_open_morning": "Goedemorgen, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
-        "greet_open_afternoon": "Goedemiddag, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
-        "greet_open_evening": "Goedenavond, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+        "greet_open_morning": "Goedemorgen, u spreekt met SARA, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+        "greet_open_afternoon": "Goedemiddag, u spreekt met SARA, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+        "greet_open_evening": "Goedenavond, u spreekt met SARA, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
         "greet_closed": "We zijn op dit moment gesloten. U kunt ons weer bereiken vanaf vier uur in de middag.",
         "ask_flow_start": "Wilt u bezorgen of afhalen?",
         "ask_phone": "Welk telefoonnummer kan ik gebruiken om uw adres te controleren?",
@@ -75,24 +80,117 @@ DELIVERY_CFG = _load_json(
     },
 )
 
+# ---------- Basic Auth (admin) ----------
+def _is_basic_auth_ok(request: Request) -> bool:
+    auth = request.headers.get("authorization", "")
+    if not auth.lower().startswith("basic "):
+        return False
+    try:
+        dec = base64.b64decode(auth.split(" ",1)[1]).decode("utf-8")
+        user, pw = dec.split(":",1)
+        return (user == ADMIN_USER and pw == ADMIN_PASS)
+    except Exception:
+        return False
+
+@app.middleware("http")
+async def admin_auth_mw(request: Request, call_next):
+    p = request.url.path or ""
+    if p.startswith("/admin/ui") or p.startswith("/admin/toggles"):
+        if not _is_basic_auth_ok(request):
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": 'Basic realm="Admin"'},
+                content="Unauthorized",
+                media_type="text/plain",
+            )
+    return await call_next(request)
+
+if ADMIN_UI_DIR.exists():
+    app.mount("/admin/ui", StaticFiles(directory=str(ADMIN_UI_DIR), html=True), name="admin-ui")
+
 # ---------- Models ----------
 class RuntimeOut(BaseModel):
     now: str
     mode: Literal["open","closed"]
     delivery_enabled: bool
     window: dict
+    bot_enabled: bool
+    pasta_available: bool
+    delay_pasta_minutes: int
+    delay_schotels_minutes: int
+
+# ---------- Overrides ----------
+OVERRIDES_KEY = "mada:overrides"
+DEFAULT_OVERRIDES = {
+    "bot_enabled": True,
+    "pasta_available": True,
+    "delay_pasta_minutes": 0,
+    "delay_schotels_minutes": 0,
+    "is_open_override": "auto",  # auto|open|closed
+    "delivery_enabled": False,
+}
+OVERRIDES_TTL_MIN = int(os.getenv("OVERRIDES_TTL_MIN", "180"))
+
+def _redis():
+    from redis import Redis
+    return Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)
+
+def load_overrides() -> Dict[str, Any]:
+    try:
+        r = _redis()
+        raw = r.get(OVERRIDES_KEY)
+        if not raw:
+            return DEFAULT_OVERRIDES.copy()
+        data = json.loads(raw)
+        out = DEFAULT_OVERRIDES.copy()
+        out.update({k:v for k,v in data.items() if k in out})
+        return out
+    except Exception:
+        return DEFAULT_OVERRIDES.copy()
+
+def save_overrides(data: Dict[str, Any]):
+    body = DEFAULT_OVERRIDES.copy()
+    body.update({k: data.get(k, body[k]) for k in body.keys()})
+    try:
+        r = _redis()
+        r.set(OVERRIDES_KEY, json.dumps(body, ensure_ascii=False), ex=OVERRIDES_TTL_MIN*60)
+    except Exception:
+        pass
+    return body
 
 # ---------- Status ----------
-def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
+def _auto(now: Optional[datetime] = None) -> Dict[str, Any]:
     now = now.astimezone(TZ) if now else datetime.now(TZ)
     t = now.time()
     open_now = OPEN_START <= t < OPEN_END
-    delivery = open_now and (DEL_START <= t < DEL_END)
+    delivery_now = OPEN_START <= t < OPEN_END and (DEL_START <= t < DEL_END)
+    return {"now": now, "mode": "open" if open_now else "closed", "delivery_window": delivery_now}
+
+def evaluate_status(now: Optional[datetime] = None) -> RuntimeOut:
+    ov = load_overrides()
+    auto = _auto(now)
+
+    mode = auto["mode"]
+    if ov.get("is_open_override") == "open":
+        mode = "open"
+    elif ov.get("is_open_override") == "closed":
+        mode = "closed"
+
+    if mode == "closed":
+        delivery_enabled = False
+    else:
+        delivery_enabled = bool(ov.get("delivery_enabled") or auto["delivery_window"])
+
+    now_dt = auto["now"]
     return RuntimeOut(
-        now=now.isoformat(),
-        mode="open" if open_now else "closed",
-        delivery_enabled=delivery,
+        now=now_dt.isoformat(),
+        mode=mode,
+        delivery_enabled=delivery_enabled,
         window={"open":"16:00","delivery":"17:00-21:30","close":"22:00"},
+        bot_enabled=bool(ov.get("bot_enabled", True)),
+        pasta_available=bool(ov.get("pasta_available", True)),
+        delay_pasta_minutes=int(ov.get("delay_pasta_minutes", 0)),
+        delay_schotels_minutes=int(ov.get("delay_schotels_minutes", 0)),
     )
 
 @app.get("/runtime/status", response_model=RuntimeOut)
@@ -103,7 +201,7 @@ def runtime_status():
 def healthz():
     return JSONResponse({"ok": True, "time": datetime.now(TZ).isoformat(), "tz": str(TZ)})
 
-# ---------- TTS (OpenAI) ----------
+# ---------- TTS ----------
 @app.get("/tts")
 async def tts(text: str):
     if not OPENAI_API_KEY:
@@ -132,7 +230,7 @@ def greeting_text() -> str:
     else:
         return PROMPTS["greet_closed"]
 
-# ---------- Twilio Voice (semi-realtime Gather) ----------
+# ---------- Voice ----------
 @app.api_route("/voice/incoming", methods=["GET","POST"])
 def voice_incoming():
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -162,7 +260,6 @@ def _contains(text: str, *keys: str) -> bool:
 
 @app.post("/voice/handle")
 async def voice_handle(request: Request):
-    # Robuuste form-parse
     try:
         form = await request.form()
         speech = (form.get("SpeechResult") or "").strip()
@@ -177,9 +274,8 @@ async def voice_handle(request: Request):
 </Response>"""
         return Response(content=twiml, media_type="text/xml")
 
-    # Basis routering
     if _contains(speech, "bezorg", "bezorgen"):
-        msg = PROMPTS["ask_phone"]  # daarna kun je /crm/lookup gebruiken
+        msg = PROMPTS["ask_phone"]
     elif _contains(speech, "afhaal", "afhalen", "ophalen"):
         msg = PROMPTS["ask_items"]
     elif _contains(speech, "telefoon", "nummer"):
@@ -200,10 +296,25 @@ async def voice_handle(request: Request):
 </Response>"""
     return Response(content=twiml, media_type="text/xml")
 
-# ---------- CRM lookup (CSV op Render disk) ----------
+@app.post("/voice/status")
+async def voice_status(request: Request):
+    try:
+        data = await request.form()
+        payload = {k: data.get(k) for k in data.keys()}
+    except Exception:
+        payload = {}
+    try:
+        os.makedirs("/mnt/data", exist_ok=True)
+        with open("/mnt/data/twilio_status.log", "a", encoding="utf-8") as fp:
+            fp.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    return PlainTextResponse("ok")
+
+# ---------- CRM ----------
 @app.get("/crm/lookup")
 def crm_lookup(tel: str = Query(..., min_length=6)):
-    """CSV kolommen: fname,iname,phone,mobile,postcode,street1,house_number"""
+    """CSV: fname,iname,phone,mobile,postcode,street1,house_number"""
     path = CUSTOMER_CSV
     tel_norm = ''.join(ch for ch in tel if ch.isdigit())
     if not os.path.exists(path):
@@ -228,10 +339,9 @@ def crm_lookup(tel: str = Query(..., min_length=6)):
                 }
     return {"found": False}
 
-# ---------- Order opslaan (Redis + filelog) ----------
+# ---------- Orders ----------
 @app.post("/order/submit")
 async def order_submit(request: Request):
-    """Verwacht: {items:[], total:..., klant:{naam,tel,adres}, fulfilment:{type,tijd}, betaalwijze, opmerkingen}"""
     try:
         payload = await request.json()
     except Exception:
@@ -241,7 +351,6 @@ async def order_submit(request: Request):
     payload["order_id"] = order_id
     payload["created_at"] = datetime.now(TZ).isoformat()
 
-    # Redis (best effort)
     try:
         from redis import Redis
         rds = Redis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379"), decode_responses=True)
@@ -250,7 +359,6 @@ async def order_submit(request: Request):
     except Exception:
         pass
 
-    # File log (durable op Render)
     try:
         os.makedirs("/mnt/data", exist_ok=True)
         with open("/mnt/data/orders.log", "a", encoding="utf-8") as fp:
@@ -259,3 +367,33 @@ async def order_submit(request: Request):
         pass
 
     return {"ok": True, "order_id": order_id}
+
+# ---------- Admin toggles ----------
+@app.post("/admin/toggles")
+async def admin_toggles(request: Request):
+    """
+    JSON:
+    { bot_enabled, pasta_available, delay_pasta_minutes, delay_schotels_minutes,
+      is_open_override: "auto"|"open"|"closed", delivery_enabled }
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    if body.get("is_open_override") not in {"auto","open","closed"}:
+        body["is_open_override"] = "auto"
+
+    def _norm(v):
+        try:
+            n = int(v)
+        except Exception:
+            n = 0
+        allowed = [0,10,20,30,45,60]
+        return min(allowed, key=lambda a: abs(a-n))
+
+    body["delay_pasta_minutes"] = _norm(body.get("delay_pasta_minutes", 0))
+    body["delay_schotels_minutes"] = _norm(body.get("delay_schotels_minutes", 0))
+
+    saved = save_overrides(body)
+    return {"ok": True, "saved": saved, "ttl_minutes": OVERRIDES_TTL_MIN}
