@@ -1,7 +1,7 @@
 {
-  "greet_open_morning": "Goedemorgen, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
-  "greet_open_afternoon": "Goedemiddag, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
-  "greet_open_evening": "Goedenavond, u spreekt met Mada, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+  "greet_open_morning": "Goedemorgen, u spreekt met SARA, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+  "greet_open_afternoon": "Goedemiddag, u spreekt met SARA, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
+  "greet_open_evening": "Goedenavond, u spreekt met SARA, de digitale assistent van Ristorante Adam Spanbroek. Waarmee kan ik u helpen?",
   "greet_closed": "We zijn op dit moment gesloten. U kunt ons weer bereiken vanaf vier uur in de middag.",
   "ask_flow_start": "Wilt u bezorgen of afhalen?",
   "ask_phone": "Welk telefoonnummer kan ik gebruiken om uw adres te controleren?",
@@ -18,5 +18,6 @@
   "confirm_payment": "Genoteerd: {betaling}.",
   "closing": "Dank u wel. Uw bestelling staat in. Fijne dag.",
   "fallback1": "Ik heb u niet goed verstaan. Kunt u het herhalen?",
-  "fallback2_transfer": "Nog één moment. Ik verbind u door met een collega."
+  "fallback2_transfer": "Nog één moment. Ik verbind u door met een collega.",
+  "say_prompt": "Zegt u maar."
 }
