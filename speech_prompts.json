@@ -1,0 +1,30 @@
+{
+  "greet_open_morning": "Goedemorgen, u spreekt met SARA, de digitale assistent van Ristorante Adam in Spanbroek. Wat kan ik voor u doen?",
+  "greet_open_afternoon": "Goedemiddag, u spreekt met SARA, de digitale assistent van Ristorante Adam in Spanbroek. Wat kan ik voor u doen?",
+  "greet_open_evening": "Goedenavond, u spreekt met SARA, de digitale assistent van Ristorante Adam in Spanbroek. Wat kan ik voor u doen?",
+  "greet_closed": "We zijn op dit moment gesloten. U kunt ons weer bereiken vanaf vier uur vanmiddag. Dank u wel, en een fijne dag verder.",
+
+  "ask_items": "Wat wilt u bestellen?",
+  "reply_start_order": "Natuurlijk! Wat wilt u graag bestellen?",
+  "ask_pizza_which": "Helemaal goed, welke pizza’s wilt u precies?",
+
+  "item_added": "Genoteerd, {qty} × {name}.",
+  "ask_items_more": "Wilt u daar nog iets bij bestellen, of is dit alles voor nu?",
+
+  "confirm_items": "Even ter bevestiging: {items}.",
+  "ask_items_confirm_ok": "Klopt dat?",
+  "total_after_confirm": "Helemaal goed, dan komt het totaal op {amount} euro.",
+
+  "ask_fulfilment": "Wilt u de bestelling afhalen, of laten bezorgen?",
+  "ask_phone_for_delivery": "Prima, mag ik uw telefoonnummer even, dan controleer ik uw adres?",
+  "confirm_lookup_found": "Ik zie hier dat het voor {straat} {huisnr} in {postcode} is, klopt dat?",
+  "confirm_lookup_missing": "Ik heb dit adres nog niet in mijn systeem. Kunt u mij uw postcode en huisnummer geven?",
+  "ask_postcode_house": "Kunt u uw postcode en huisnummer herhalen?",
+
+  "delivery_eta": "Dank u wel. Uw bestelling wordt bezorgd om ongeveer {time}.",
+  "closing_delivery": "Een fijne dag nog, en eet smakelijk alvast.",
+  "pickup_eta": "Helemaal goed. Uw bestelling staat klaar om ongeveer {time}.",
+  "closing_pickup": "Dank u wel, en tot straks!",
+
+  "fallback1": "Sorry, ik heb u niet goed verstaan. Kunt u dat nog één keer herhalen?"
+}
