@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Mada AI Assistent • Live instellingen</title>
+<title>SARA AI Assistent • Live instellingen</title>
 <style>
   :root{
     --bg-open:#e9f2eb;--bg-closed:#f4e9e9;--card:#fff;--ink:#0f1720;--muted:#6b7280;--line:#e5e7eb;
@@ -27,12 +27,10 @@
   .card h2{margin:0 0 8px}
   .sub{color:var(--muted);margin:0 0 12px}
 
-  /* status */
   .status2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .stat{border:1px solid var(--line);border-radius:14px;padding:14px 12px;text-align:center;font-weight:700}
   .stat .ttl{display:block;font-weight:600;color:var(--muted);margin-bottom:6px}
 
-  /* switches: UIT = rood + knop rechts, AAN = groen + knop links */
   .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;margin:10px 0}
   .row label{font-weight:600}
   .switch{width:54px;height:30px;border-radius:999px;position:relative;cursor:pointer;flex:0 0 auto;background:var(--red)}
@@ -43,7 +41,6 @@
   .bg{position:absolute;inset:0;border-radius:999px;background:var(--red);transition:background .2s}
   .switch.disabled{opacity:.5;pointer-events:none}
 
-  /* sliders + presets */
   .range{display:flex;align-items:center;gap:10px;width:100%}
   input[type="range"]{width:100%;height:6px;border-radius:999px;background:#ddd;accent-color:currentColor}
   .badge{min-width:38px;text-align:center;border:1px solid var(--line);border-radius:10px;padding:4px 8px;color:var(--muted);font-weight:700}
@@ -51,7 +48,6 @@
   .chip-btn{border:1px solid var(--line);border-radius:999px;padding:6px 10px;background:#fff;cursor:pointer}
   .chip-btn.active{border-color:var(--green);color:var(--green);font-weight:700}
 
-  /* actions */
   .actions{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;margin-top:12px;background:var(--card);padding:12px;border-radius:14px;border:1px solid var(--line)}
   .btn{appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:800;cursor:pointer;color:#fff;background:var(--green)}
   .btn.warn{background:var(--amber)}
@@ -68,53 +64,51 @@
       <button class="back" onclick="location.href='/admin/ui/index.html'">Terug</button>
       <div class="brand">
         <div class="flag"></div>
-        <h1>Mada AI Assistent • Live instellingen</h1>
+        <h1>SARA AI Assistent • Live instellingen</h1>
       </div>
       <div class="header-chips">
-        <span id="chip_mada" class="chip">Mada: …</span>
+        <span id="chip_mada" class="chip">SARA: …</span>
         <span id="chip_open" class="chip">Restaurant: …</span>
         <a href="/admin/logout" class="muted" title="Uitloggen">uitloggen</a>
       </div>
     </header>
 
     <div class="grid">
-      <!-- Status -->
       <section class="card" aria-live="polite">
         <h2>Status</h2>
         <p class="sub">Actuele toestand volgens runtime.</p>
         <div class="status2">
           <div class="stat"><span class="ttl">Restaurant</span><span id="st_open" class="">…</span></div>
-          <div class="stat"><span class="ttl">Mada</span><span id="st_bot" class="">…</span></div>
+          <div class="stat"><span class="ttl">SARA</span><span id="st_bot" class="">…</span></div>
         </div>
         <p class="sub" id="win" style="margin-top:8px"></p>
         <p class="sub" id="svctime" style="margin-top:4px"></p>
       </section>
 
-      <!-- Instellingen -->
       <section class="card">
         <h2>Instellingen</h2>
 
-        <div class="row" title="Schakel Mada in of uit. Alleen de begroeting en telefonie.">
-          <label for="bot_enabled">Mada actief</label>
+        <div class="row" title="Schakel SARA in of uit. Alleen de begroeting en telefonie.">
+          <label for="bot_enabled">SARA actief</label>
           <label class="switch" id="sw_bot">
-            <input id="bot_enabled" type="checkbox" aria-label="Mada actief" />
+            <input id="bot_enabled" type="checkbox" aria-label="SARA actief" />
             <span class="knob"></span><span class="bg"></span>
           </label>
         </div>
 
-        <div class="row" title="Toon pizza’s in de menukeuze.">
-          <label for="pasta_available">Pizza’s beschikbaar</label>
+        <div class="row" title="Toon pasta in de menukeuze.">
+          <label for="pasta_available">Pasta’s beschikbaar</label>
           <label class="switch" id="sw_pizza">
-            <input id="pasta_available" type="checkbox" aria-label="Pizza’s beschikbaar" />
+            <input id="pasta_available" type="checkbox" aria-label="Pasta’s beschikbaar" />
             <span class="knob"></span><span class="bg"></span>
           </label>
         </div>
 
         <div class="row">
-          <label>Vertraging pizza</label>
+          <label>Vertraging pasta</label>
           <div style="width:100%">
             <div class="range">
-              <input id="delay_pasta_minutes" type="range" min="0" max="60" step="5" aria-label="Vertraging pizza" />
+              <input id="delay_pasta_minutes" type="range" min="0" max="60" step="5" aria-label="Vertraging pasta" />
               <span class="badge" id="badge_pasta">0</span>
             </div>
             <div class="presets" id="pre_pasta"></div>
