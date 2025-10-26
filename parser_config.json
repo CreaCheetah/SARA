@@ -1,0 +1,27 @@
+{
+  "generic_words": ["pizza", "pizzas", "pasta", "schotel", "schotels", "broodje", "broodjes"],
+  "number_words": {
+    "een": 1,
+    "één": 1,
+    "1": 1,
+    "twee": 2,
+    "2": 2,
+    "drie": 3,
+    "3": 3,
+    "vier": 4,
+    "4": 4,
+    "vijf": 5,
+    "5": 5,
+    "zes": 6,
+    "6": 6,
+    "zeven": 7,
+    "7": 7,
+    "acht": 8,
+    "8": 8,
+    "negen": 9,
+    "9": 9,
+    "tien": 10,
+    "10": 10
+  },
+  "min_token_match": 1
+}
