@@ -63,20 +63,17 @@ async function getStatus(){
   if(!r.ok) return;
   const j = await r.json();
 
-  // chips + status
   const isOpen = (j.mode === 'open');
   setPill($("st_open"), isOpen);
   setPill($("st_bot"), !!j.bot_enabled);
-  setChip($("chip_mada"), "Mada", !!j.bot_enabled);
+  setChip($("chip_mada"), "SARA", !!j.bot_enabled);
   setOpenChip(j.mode);
   $("win").textContent = `Tijdvenster ${j.window.open} • ${j.window.delivery} • ${j.window.close}`;
   $("svctime").textContent = `Systeemtijd: ${new Date(j.now).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'})}`;
 
-  // thema + radios
   theme(j.mode);
   syncRadiosFromMode(j.mode);
 
-  // inputs
   $("bot_enabled").checked = !!j.bot_enabled;
   $("pasta_available").checked = !!j.pasta_available;
 
@@ -131,7 +128,6 @@ async function save(){
 }
 
 function resetDefaults(){
-  // Auto, delivery volgens venster, vertraging 0
   document.querySelector('input[name="mode"][value="auto"]').checked = true;
   $("delivery_enabled").checked = false;
   $("delay_pasta_minutes").value = 0; $("badge_pasta").textContent = 0;
@@ -147,13 +143,11 @@ $("reset").onclick = resetDefaults;
 let timer = setInterval(getStatus, 5000);
 $("autopoll").onchange = e => { if(e.target.checked){ timer=setInterval(getStatus,5000) } else { clearInterval(timer) } };
 
-// Pauzeer polling als tab verborgen is
 document.addEventListener("visibilitychange", ()=>{
   if(document.hidden){ clearInterval(timer); }
   else if($("autopoll").checked){ timer = setInterval(getStatus, 5000); getStatus(); }
 });
 
-// Enter → opslaan
 document.addEventListener("keydown", (e)=>{ if(e.key==="Enter") save(); });
 
 hookSliders();
