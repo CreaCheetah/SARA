@@ -1,4 +1,4 @@
-import os, json, csv, re
+import os, json, csv, re, unicodedata
 from datetime import datetime, time, timedelta
 from typing import Dict, Any, List
 from pathlib import Path
@@ -29,6 +29,17 @@ def _jload(path: Path, fb: dict) -> dict:
     except Exception:
         return fb
 
+def _norm_txt(s: str) -> str:
+    s = s.lower().strip()
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")  # haal accenten weg
+    s = s.replace("’", "'").replace("‘", "'")
+    s = s.replace("‘", "'").replace("`", "'")
+    s = s.replace("’s", "s")  # pizza’s -> pizzas
+    s = re.sub(r"[^a-z0-9\s\-\&]", " ", s)
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
 def _load_menu() -> List[Dict[str, Any]]:
     try:
         with open(MENU_PATH, encoding="utf-8") as f:
@@ -39,7 +50,14 @@ def _load_menu() -> List[Dict[str, Any]]:
             price = float(it.get("price") or it.get("prijs") or 0)
             code = it.get("code") or it.get("id") or name.lower().replace(" ", "_")[:24]
             if name and price > 0:
-                out.append({"code": code, "name": name, "price": price, "norm": name.lower()})
+                norm = _norm_txt(name)
+                out.append({
+                    "code": code,
+                    "name": name,
+                    "price": price,
+                    "norm": norm,
+                    "tokens": [t for t in norm.split() if len(t) >= 3]
+                })
         return out
     except Exception:
         return []
@@ -68,13 +86,13 @@ def _ovr_load() -> dict:
         return DEFAULT_OVERRIDES.copy()
 
 def _ovr_save(body: dict) -> dict:
-    def _norm(v):
+    def _norm_int(v):
         try: n = int(v)
         except Exception: n = 0
         allowed = [0,10,20,30,45,60]
         return min(allowed, key=lambda a: abs(a-n))
-    body["delay_pasta_minutes"] = _norm(body.get("delay_pasta_minutes", 0))
-    body["delay_schotels_minutes"] = _norm(body.get("delay_schotels_minutes", 0))
+    body["delay_pasta_minutes"] = _norm_int(body.get("delay_pasta_minutes", 0))
+    body["delay_schotels_minutes"] = _norm_int(body.get("delay_schotels_minutes", 0))
     saved = DEFAULT_OVERRIDES.copy(); saved.update({k: body.get(k, saved[k]) for k in saved.keys()})
     try:
         r = _redis(); r.set(OVERRIDES_KEY, json.dumps(saved, ensure_ascii=False), ex=OVR_TTL*60)
@@ -137,30 +155,72 @@ def _savec(sid: str, data: dict):
     except Exception:
         pass
 
-# ---------- Helpers ----------
-def _fmt_eur(x: float) -> str: return f"{x:0.2f}".replace(".", ",")
+# ---------- Parser helpers ----------
+NUMWORDS = {
+    "een":1,"één":1,"1":1,
+    "twee":2,"2":2,
+    "drie":3,"3":3,
+    "vier":4,"4":4,
+    "vijf":5,"5":5,
+    "zes":6,"6":6,
+    "zeven":7,"7":7,
+    "acht":8,"8":8,
+    "negen":9,"9":9,
+    "tien":10,"10":10
+}
+
+def _num_from_word(w: str) -> int | None:
+    return NUMWORDS.get(w)
+
+def _match_menu_segment(seg: str) -> Dict[str, Any] | None:
+    seg = _norm_txt(seg)
+    if not seg: return None
+    # directe norm
+    for it in MENU:
+        if it["norm"] in seg:
+            return it
+    # token overlap
+    segtoks = [t for t in seg.split() if len(t) >= 3]
+    best = None; best_score = 0
+    for it in MENU:
+        inter = len(set(it["tokens"]) & set(segtoks))
+        if inter > best_score:
+            best = it; best_score = inter
+    return best if best_score >= 1 else None
+
+def _split_phrases(txt: str) -> List[str]:
+    # splits op en/komma/plusteken, houdt losse stukjes over
+    return [p for p in re.split(r"\s*(?:,| en | plus | & | en dan )\s*", txt) if p]
 
 def _parse_items(utt: str) -> List[dict]:
-    txt = re.sub(r"\s+", " ", utt.lower()).strip()
-    res = []
-    m = re.findall(r"(\d+)\s+([a-z0-9äöüëéèïîç\s\-]+)", txt)
+    txt = _norm_txt(utt)
+    res: List[dict] = []
     used = set()
-    if m:
-        for qty_s, tail in m:
-            qty = max(1, int(qty_s))
-            hit = None
-            for it in MENU:
-                if it["norm"] in tail and it["norm"] not in used:
-                    hit = it; break
-            if hit:
-                used.add(hit["norm"])
-                res.append({"code": hit["code"], "name": hit["name"], "price": hit["price"], "qty": qty})
+
+    parts = _split_phrases(txt)
+
+    # 1) "2 margherita", "twee quattro formaggi"
+    for p in parts:
+        m = re.match(r"^((\d+)|([a-zé]+))\s+(.+)$", p)
+        if m:
+            qty = int(m.group(2)) if m.group(2) else _num_from_word(m.group(3) or "")
+            tail = m.group(4) if m else ""
+            if qty:
+                hit = _match_menu_segment(tail)
+                if hit and hit["norm"] not in used:
+                    used.add(hit["norm"])
+                    res.append({"code": hit["code"], "name": hit["name"], "price": hit["price"], "qty": max(1, qty)})
+
+    # 2) zonder hoeveelheid: "margherita", "quattro formaggi"
     if not res:
-        for it in MENU:
-            if it["norm"] in txt:
-                res.append({"code": it["code"], "name": it["name"], "price": it["price"], "qty": 1})
+        for p in parts:
+            hit = _match_menu_segment(p)
+            if hit:
+                res.append({"code": hit["code"], "name": hit["name"], "price": hit["price"], "qty": 1})
+
     return res
 
+# ---------- Money/time helpers ----------
 def _items_text(items: List[dict]) -> str:
     return ", ".join([f'{i["qty"]}× {i["name"]}' for i in items]) if items else "geen items"
 
@@ -180,6 +240,9 @@ def _eta_minutes(kind: str, d_pasta: int, d_schotels: int) -> int:
     base = CFG.get("sla", {}).get("delivery_minutes" if kind=="delivery" else "pickup_minutes", 30)
     return int(base) + int(max(d_pasta, d_schotels))
 
+def _fmt_eur(x: float) -> str:
+    return f"{x:0.2f}".replace(".", ",")
+
 # ---------- Public ----------
 class FlowManager:
     @staticmethod
@@ -195,6 +258,7 @@ class FlowManager:
     def handle_utterance(sid: str, speech: str, P: dict) -> dict:
         s = _getc(sid)
         utt = (speech or "").strip().lower()
+        utt_norm = _norm_txt(utt)
 
         def out(msgs: List[str], nxt: str):
             s["state"] = nxt; _savec(sid, s); return {"messages": msgs, "next": nxt}
@@ -203,50 +267,60 @@ class FlowManager:
         if s["state"] in ("greet", None):
             return out([P["ask_items"]], "ask_items")
 
-        # expliciet “ik wil bestellen” → vaste zin
-        if any(k in utt for k in ["ik wil bestellen", "bestelling plaatsen", "mag ik wat bestellen"]):
+        # expliciet startzinnen
+        if any(k in utt_norm for k in ["ik wil bestellen", "bestelling plaatsen", "mag ik wat bestellen"]):
             return out([P["reply_start_order"]], "ask_items")
 
         # items verzamelen
         if s["state"] in ("ask_items", "collecting"):
-            items = _parse_items(utt)
-            if items:
-                s["items"] += items; _savec(sid, s)
-                last = items[-1]
-                return out([P["item_added"].format(qty=last["qty"], name=last["name"]), P["ask_items_more"]], "confirm_more")
+            items = _parse_items(utt_norm)
 
-            # onduidelijk: klant zegt “twee pizza’s” zonder soort
-            if any(k in utt for k in ["pizza", "pizza's", "pizzas"]) and not s["items"]:
+            # als “pizza” gezegd is maar geen herkend item → doorvragen welke
+            if not items and re.search(r"\bpizza?s?\b", utt_norm):
                 return out([P["ask_pizza_which"]], "ask_items")
 
+            if items:
+                s["items"] += items
+                _savec(sid, s)
+                last = items[-1]
+                # na item altijd naar confirm_more
+                return out([P["item_added"].format(qty=last["qty"], name=last["name"]), P["ask_items_more"]], "confirm_more")
+
+            # geen items en geen pizza’s → herhaal hoofdvraag
             return out([P["ask_items"]], "ask_items")
 
         # confirm_more
         if s["state"] == "confirm_more":
-            if any(k in utt for k in ["ja","nog","meer","toevoegen"]):
+            if any(k in utt_norm for k in ["ja","nog","meer","toevoegen"]):
                 return out([P["ask_items"]], "ask_items")
-            if any(k in utt for k in ["nee","dat is alles","klaar","niets"]):
+            if any(k in utt_norm for k in ["nee","dat is alles","klaar","niets"]):
                 s["total"] = _total(s["items"]); _savec(sid, s)
                 return out([P["confirm_items"].format(items=_items_text(s["items"])), P["ask_items_confirm_ok"]], "confirm_summary")
+            # klant noemt hier nieuwe items direct: toch proberen te parsen
+            items = _parse_items(utt_norm)
+            if items:
+                s["items"] += items; _savec(sid, s)
+                last = items[-1]
+                return out([P["item_added"].format(qty=last["qty"], name=last["name"]), P["ask_items_more"]], "confirm_more")
             return out([P["ask_items_more"]], "confirm_more")
 
         # confirm_summary: eerst bevestiging, pas daarna bedrag
         if s["state"] == "confirm_summary":
-            if any(k in utt for k in ["ja","klopt","correct"]):
+            if any(k in utt_norm for k in ["ja","klopt","correct"]):
                 amt = s.get("total", 0.0)
-                return out([P["total_after_confirm"].format(amount=int(round(amt))) , P["ask_fulfilment"]], "fulfilment")
-            if any(k in utt for k in ["nee","klopt niet","anders"]):
+                return out([P["total_after_confirm"].format(amount=int(round(amt))), P["ask_fulfilment"]], "fulfilment")
+            if any(k in utt_norm for k in ["nee","klopt niet","anders"]):
                 return out([P["ask_items"]], "ask_items")
             return out([P["ask_items_confirm_ok"]], "confirm_summary")
 
         # fulfilment
         if s["state"] == "fulfilment":
-            if any(k in utt for k in ["afhaal","afhalen","ophalen"]):
+            if any(k in utt_norm for k in ["afhaal","afhalen","ophalen"]):
                 st = runtime_status()
                 mins = _eta_minutes("pickup", st["delay_pasta_minutes"], st["delay_schotels_minutes"])
                 ready = (datetime.now(TZ) + timedelta(minutes=mins)).strftime("%H:%M")
                 return {"messages":[P["pickup_eta"].format(time=ready), P["closing_pickup"]], "next":"end"}
-            if any(k in utt for k in ["bezorg","bezorgen","thuis"]):
+            if any(k in utt_norm for k in ["bezorg","bezorgen","thuis"]):
                 return out([P["ask_phone_for_delivery"]], "phone")
             return out([P["ask_fulfilment"]], "fulfilment")
 
@@ -280,7 +354,7 @@ class FlowManager:
 
         # crm_confirm
         if s["state"] == "crm_confirm":
-            if any(k in utt for k in ["ja","klopt","correct"]):
+            if any(k in utt_norm for k in ["ja","klopt","correct"]):
                 st = runtime_status()
                 mins = _eta_minutes("delivery", st["delay_pasta_minutes"], st["delay_schotels_minutes"])
                 ready = (datetime.now(TZ) + timedelta(minutes=mins)).strftime("%H:%M")
@@ -288,7 +362,7 @@ class FlowManager:
                 fee = _delivery_fee(s.get("customer",{}).get("postcode",""))
                 tot = int(round(tot + fee))
                 return {"messages":[P["delivery_eta"].format(time=ready), P["total_after_confirm"].format(amount=tot), P["closing_delivery"]], "next":"end"}
-            if any(k in utt for k in ["nee","klopt niet","anders"]):
+            if any(k in utt_norm for k in ["nee","klopt niet","anders"]):
                 return out([P["confirm_lookup_missing"]], "address")
             # herhaal
             c = s.get("customer",{})
