@@ -218,9 +218,11 @@ async def tts(text: str):
 def say_url(text: str) -> str:
     return f"{BASE_URL}/tts?text={quote_plus(text)}"
 
+# ---------- Begroeting op basis van override ----------
 def greeting_text() -> str:
-    now = datetime.now(TZ).time()
-    if OPEN_START <= now < OPEN_END:
+    st = evaluate_status()  # gebruikt dashboard-override
+    if st.mode == "open":
+        now = datetime.now(TZ).time()
         if now < time(12, 0):
             return PROMPTS["greet_open_morning"]
         elif now < time(18, 0):
@@ -296,6 +298,7 @@ async def voice_handle(request: Request):
 </Response>"""
     return Response(content=twiml, media_type="text/xml")
 
+# ---------- Status callback ----------
 @app.post("/voice/status")
 async def voice_status(request: Request):
     try:
